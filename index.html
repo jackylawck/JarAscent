@@ -7,7 +7,7 @@
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     
     <title>🚀 躍上天穹 3D | JarAscent 3D</title>
-    <meta name="description" content="純本地 WebGL 3D 航太級天體動力學與全流程分離沙盒。">
+    <meta name="description" content="航太級天體動力學、真實多級分離與結構極限沙盒。">
     <meta name="theme-color" content="#030712">
 
     <style>
@@ -20,13 +20,14 @@
             transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
             transform: translateX(0); opacity: 1;
         }
-        .ui-overlay.collapsed { transform: translateX(-380px); opacity: 0; pointer-events: none; }
-        .ui-card { background: rgba(10, 16, 30, 0.88); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 340px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
-        @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 340px; } }
+        .ui-overlay.collapsed { transform: translateX(-400px); opacity: 0; pointer-events: none; }
+        .ui-card { background: rgba(10, 16, 30, 0.90); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 360px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
+        @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 360px; } }
         
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         h1 { font-size: 1.15rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; margin: 0; }
         .lang-btn { background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
+        .lang-btn:hover { background: #38bdf8; color: #030712; }
         p { font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.3; }
         
         .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 10px 12px; font-size: 0.88rem; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s, filter 0.2s; margin-top: 6px; display: block; text-align: center; }
@@ -37,7 +38,7 @@
         .status-banner { font-size: 0.82rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
         .config-panel { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.08); }
         .config-panel h3 { font-size: 0.8rem; color: #fbbf24; margin-bottom: 6px; }
-        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.72rem; }
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.72rem; }
         .form-row label { color: #cbd5e1; }
         .form-row select, .form-row input[type="range"] { background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; width: 55%; }
         
@@ -121,15 +122,15 @@
 <body>
     <div class="top-hud-bar">
         <div class="hud-metric-box">
-            <div class="hud-metric-label">TIME T+</div>
+            <div class="hud-metric-label" id="hud-lbl-time">TIME T+</div>
             <div class="hud-metric-val" id="hud-time">0.0s</div>
         </div>
         <div class="hud-metric-box">
-            <div class="hud-metric-label">ALTITUDE</div>
+            <div class="hud-metric-label" id="hud-lbl-alt">ALTITUDE</div>
             <div class="hud-metric-val" id="hud-alt">0.0 km</div>
         </div>
         <div class="hud-metric-box">
-            <div class="hud-metric-label">VELOCITY</div>
+            <div class="hud-metric-label" id="hud-lbl-vel">VELOCITY</div>
             <div class="hud-metric-val" id="hud-vel">0 m/s</div>
         </div>
     </div>
@@ -141,17 +142,18 @@
 
     <div id="debrief-modal">
         <div class="debrief-card">
-            <h2 style="color: #38bdf8; font-size: 1.3rem;">MISSION DEBRIEF // 任務結算</h2>
+            <h2 id="debrief-header" style="color: #38bdf8; font-size: 1.3rem;">MISSION DEBRIEF</h2>
             <div class="debrief-rank" id="debrief-rank">S+</div>
             <p id="debrief-title" style="color: #fbbf24; font-weight: bold; font-size: 1rem;">🌟 傳奇星際導航官 (Grandmaster Ace)</p>
             <div class="debrief-stats">
-                • 最高地速 (Max Vel): <b id="stat-maxvel">0 m/s</b><br>
-                • 最大動態氣壓 (Max-Q): <b id="stat-maxq">0 kPa</b><br>
-                • 近地點誤差 (Peri Error): <b id="stat-peri-err">0.0 km</b><br>
-                • 最終軌道高度 (Orbit Alt): <b id="stat-orbit-alt">300 km</b><br>
-                • 剩餘燃料裕度 (Fuel Left): <b id="stat-fuel-left">0%</b>
+                • <span id="lbl-stat-status">任務狀態</span>: <b id="stat-status">入軌成功</b><br>
+                • <span id="lbl-stat-maxvel">最高速度</span>: <b id="stat-maxvel">0 m/s</b><br>
+                • <span id="lbl-stat-maxq">最大動態氣壓</span>: <b id="stat-maxq">0 kPa</b><br>
+                • <span id="lbl-stat-peri">近地點誤差</span>: <b id="stat-peri-err">0.0 km</b><br>
+                • <span id="lbl-stat-orbit">最終軌道</span>: <b id="stat-orbit-alt">300 km x 300 km</b><br>
+                • <span id="lbl-stat-fuel">剩餘燃料裕度</span>: <b id="stat-fuel-left">0%</b>
             </div>
-            <button class="btn" onclick="location.reload()">🔄 執行下次任務 (Next Mission)</button>
+            <button class="btn" id="btn-debrief-restart" onclick="location.reload()">🔄 重新設定並再次發射</button>
         </div>
     </div>
 
@@ -163,24 +165,23 @@
                 <h1 id="ui-title">🚀 躍上天穹 3D</h1>
                 <button class="lang-btn" id="btn-lang">English</button>
             </div>
-            <p id="ui-subtitle">科研級天體動力學與全流程分離沙盒</p>
+            <p id="ui-subtitle">航太級天體動力學、真實多級分離與結構極限沙盒</p>
 
             <div class="config-panel">
                 <h3 id="ui-config-title">🛠️ 任務與發射場設定</h3>
                 
                 <div class="form-row">
-                    <label id="lbl-env">發射場天色時間:</label>
+                    <label id="lbl-env">發射場環境天色:</label>
                     <select id="sel-env">
                         <option value="DAY" selected>☀️ 白天發射 (Day Launch)</option>
                         <option value="NIGHT">🌙 夜間發射 (Night Launch)</option>
                     </select>
                 </div>
 
-                <!-- 🚀 齊全的中外運載火箭清單 -->
                 <div class="form-row">
                     <label id="lbl-engine">運載火箭型號:</label>
                     <select id="sel-engine">
-                        <optgroup label="🇨🇳 中國新一代主力火箭">
+                        <optgroup label="🇨🇳 中國新一代主力火箭" id="grp-cn">
                             <option value="CZ10A" selected>長征十號甲 (CZ-10A 登月載人)</option>
                             <option value="CZ12B">長征十二號乙 (CZ-12B 4米級)</option>
                             <option value="TL3">天龍三號 (TL-3 大型液體)</option>
@@ -189,7 +190,7 @@
                             <option value="SQX3">雙曲線三號 (Hyperbola-3)</option>
                             <option value="CZ2F">長征二號F (CZ-2F 載人型)</option>
                         </optgroup>
-                        <optgroup label="🇺🇸 全球重型航天標竿">
+                        <optgroup label="🇺🇸 全球重型航天標竿" id="grp-us">
                             <option value="STARSHIP">星艦全系統 (Starship 120m)</option>
                             <option value="SATURN_V">土星五號 (Saturn V 110m)</option>
                         </optgroup>
@@ -200,13 +201,25 @@
                     <label id="lbl-payload">任務載荷艙:</label>
                     <select id="sel-payload">
                         <option value="8000" selected>新一代載人飛船 (8,000 kg)</option>
-                        <option value="2000">空間站貨運艙 (2,000 kg)</option>
-                        <option value="500">科學試驗衛星 (500 kg)</option>
+                        <option value="15000">空間站核心艙 (15,000 kg)</option>
+                        <option value="35000">重型貨運補給艙 (35,000 kg)</option>
+                        <option value="60000">極限超重載荷 (60,000 kg) ⚠️</option>
                     </select>
                 </div>
+
                 <div class="form-row">
-                    <label id="lbl-throttle">節流閥推力 (%):</label>
-                    <input type="range" id="rng-throttle" min="50" max="100" value="100">
+                    <label id="lbl-fuel">一級燃料加注量 (%):</label>
+                    <input type="range" id="rng-fuel" min="20" max="100" value="100">
+                </div>
+
+                <div class="form-row">
+                    <label id="lbl-throttle">發動機節流閥 (%):</label>
+                    <input type="range" id="rng-throttle" min="40" max="100" value="100">
+                </div>
+
+                <div class="form-row">
+                    <label id="lbl-turn">重力轉向高度 (km):</label>
+                    <input type="range" id="rng-turn" min="1" max="25" value="8">
                 </div>
             </div>
 
@@ -223,36 +236,36 @@
 
             <div class="hud-gauge-group">
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8;">
-                    <span>動態氣壓 (Dynamic Q)</span><b id="gauge-q-txt" style="color:#38bdf8;">0.0 kPa</b>
+                    <span id="lbl-gauge-q">動態氣壓 (Max-Q 安全極限: 55 kPa)</span><b id="gauge-q-txt" style="color:#38bdf8;">0.0 kPa</b>
                 </div>
                 <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-q" id="gauge-q-bar"></div></div>
 
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8; margin-top:6px;">
-                    <span>推進劑餘量 (Fuel Level)</span><b id="gauge-fuel-txt" style="color:#06b6d4;">100%</b>
+                    <span id="lbl-gauge-fuel">推進劑餘量</span><b id="gauge-fuel-txt" style="color:#06b6d4;">100%</b>
                 </div>
                 <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-fuel" id="gauge-fuel-bar" style="width:100%;"></div></div>
             </div>
 
             <div class="debug-panel" id="physics-debug-box">
                 <h4>
-                    <span id="ui-telemetry-title">⚙️ 即時飛行與分離狀態</span>
+                    <span id="ui-telemetry-title">⚙️ 飛行遙測與結構載荷狀態</span>
                     <button class="toggle-detail-btn" id="btn-toggle-details">📊 展開深度科研</button>
                 </h4>
                 
                 <div id="telemetry-summary">
-                    • 當前構型: <b id="t-stage-name">發射台地面 (On Pad)</b><br>
-                    • 即時推力 Thrust: <b id="t-thrust">0 kN</b><br>
-                    • 軌道狀態 Orbit: <b id="t-orbit">發射台地面 (On Pad)</b>
+                    • <span id="lbl-t-config">當前構型</span>: <b id="t-stage-name">發射台地面 (On Pad)</b><br>
+                    • <span id="lbl-t-thrust">即時推力</span>: <b id="t-thrust">0 kN</b> | TWR: <b id="t-twr">0.00</b><br>
+                    • <span id="lbl-t-orbit">軌道狀態</span>: <b id="t-orbit">發射台地面 (On Pad)</b>
                 </div>
 
                 <div id="telemetry-detail-box">
-                    • 即時過載 G-Force: <b id="t-gforce">1.00 G</b><br>
-                    • 瞬時比衝 Isp: <b id="t-isp">0 s</b><br>
-                    • 預測近地點 Peri: <b id="t-peri">0.0 km</b><br>
-                    • 預測遠地點 Apo: <b id="t-apo">0.0 km</b><br>
-                    • 軌道偏心率 Ecc (e): <b id="t-ecc">1.0000</b><br>
-                    • 軌道半長軸 Semi-a: <b id="t-sma">0 km</b><br>
-                    • 地月即時距離: <b id="t-deltav">384400 km</b>
+                    • <span id="lbl-t-gforce">即時過載 G-Force</span>: <b id="t-gforce">1.00 G</b> (<span id="lbl-t-gmax">最大耐受: 5.5 G</span>)<br>
+                    • <span id="lbl-t-isp">瞬時比衝 Isp</span>: <b id="t-isp">0 s</b><br>
+                    • <span id="lbl-t-peri">預測近地點 Peri</span>: <b id="t-peri">0.0 km</b><br>
+                    • <span id="lbl-t-apo">預測遠地點 Apo</span>: <b id="t-apo">0.0 km</b><br>
+                    • <span id="lbl-t-ecc">軌道偏心率 Ecc (e)</span>: <b id="t-ecc">1.0000</b><br>
+                    • <span id="lbl-t-sma">軌道半長軸 Semi-a</span>: <b id="t-sma">0 km</b><br>
+                    • <span id="lbl-t-moon">地月即時距離</span>: <b id="t-deltav">384,400 km</b>
                 </div>
             </div>
         </div>
