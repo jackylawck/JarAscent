@@ -85,5 +85,5 @@ export function createRocketMesh(type) {
         group.add(f1); group.add(f2);
     }
 
-    return { root: group, boosters: boostersGroup, escapeTower: escapeTower };
+    return { root: group, boosters: boostersGroup, escapeTower: escapeTower, nosePosY: nosePosY };
 }
