@@ -1,26 +1,24 @@
 /**
  * js/rocket_engine.js - JarAscent 3D 航太級動力學與數值核心
- * 包含：ECI 地心慣性系, 4階 Runge-Kutta 積分器, J2 地球扁率攝動 (Y軸極軸),
- * 大氣共轉相對風場修正, 月球三體引力攝動, 閉環零攻角重力轉向, 目標軌道自適應關機 (SECO)
  * @license MIT
  */
-import * as THREE from 'three';
 
-// 🛡️ [資安與天體常數] WGS84 + DE405 物理常數
-const MU = 3.986004418e14;           // 地球標準引力參數 (m³/s²)
-const MU_MOON = 4.9048695e12;        // 月球引力參數
-const R_EARTH = 6378137;             // 地球赤道半徑 (m)
-const R_MOON = 1737400;              // 月球半徑 (m)
-const MOON_ORBIT_RADIUS = 384400000;  // 地月平均軌道半徑 (m)
-const ROTATION_SPEED = 7.292115e-5;  // 地球自轉角速度 (rad/s)
-const J2 = 1.08262668e-3;            // 地球扁率二階帶諧係數
+// 直接使用全域 window.THREE，移除造成模組衝突的 import 語法
+const THREE = window.THREE;
+
+const MU = 3.986004418e14;
+const MU_MOON = 4.9048695e12;
+const R_EARTH = 6378137;
+const R_MOON = 1737400;
+const MOON_ORBIT_RADIUS = 384400000;
+const ROTATION_SPEED = 7.292115e-5;
+const J2 = 1.08262668e-3;
 
 export let scene, camera, renderer, controls;
 export let rocketGroup, exhaustParticles = [];
 export let earthMesh, moonMesh;
 export let velArrow, thrustArrow;
 
-// 🛡️ [資安防禦] Object.freeze() 防止發動機物理常數在運行期被篡改
 export const ENGINE_DATABASE = Object.freeze({
     MERLIN:   Object.freeze({ name: "Merlin 1D",   thrustSea: 845000,  thrustVac: 981000,  ispSea: 282, ispVac: 311, dryMassStage1: 22000, fuelMassStage1: 410000, dryMassStage2: 4000, fuelMassStage2: 92000 }),
     RAPTOR:   Object.freeze({ name: "Raptor 2",    thrustSea: 2250000, thrustVac: 2500000, ispSea: 327, ispVac: 363, dryMassStage1: 35000, fuelMassStage1: 800000, dryMassStage2: 7000, fuelMassStage2: 180000 }),
@@ -37,7 +35,7 @@ export function getMoonPosition(time) {
 export class RocketState {
     constructor() {
         this.r = new THREE.Vector3(R_EARTH, 0, 0);
-        this.v = new THREE.Vector3(0, 0, ROTATION_SPEED * R_EARTH); // 繼承赤道向東自轉初速 (~465 m/s)
+        this.v = new THREE.Vector3(0, 0, ROTATION_SPEED * R_EARTH);
         this.mass = 0;
         this.fuel1 = 0;
         this.fuel2 = 0;
@@ -49,7 +47,6 @@ export class RocketState {
         this.flightTime = 0;
         this.isLaunched = false;
         
-        // 任務目標導引參數 (預設 300km 圓軌道)
         this.guidanceActive = false;
         this.targetPeriapsis = 300000;
         this.targetApoapsis = 300000;
@@ -82,7 +79,6 @@ export class RocketState {
             ? this.engine.thrustSea + (this.engine.thrustVac - this.engine.thrustSea) * altRatio
             : this.engine.thrustVac * 0.65;
 
-        // 終端目標軌道自動節流與平滑關機 (Predictor-Corrector)
         if (this.guidanceActive) {
             const orbit = getOrbitalElements(this);
             const periError = (orbit.periapsis - this.targetPeriapsis) / this.targetPeriapsis;
@@ -133,10 +129,8 @@ export function computeDerivatives(state, dt) {
     const rMag = r.length();
     const mass = state.getCurrentMass();
 
-    // 1. 中心萬有引力
     const gravity = r.clone().multiplyScalar(-MU / Math.pow(rMag, 3));
 
-    // 2. J2 地球扁率攝動加速度 (Y 軸為自轉極軸)
     const x = r.x, y = r.y, z = r.z;
     const rMag2 = rMag * rMag;
     const coeff = 1.5 * J2 * MU * Math.pow(R_EARTH, 2) / (rMag2 * rMag2 * rMag);
@@ -147,17 +141,14 @@ export function computeDerivatives(state, dt) {
         coeff * z * (5 * yRatio - 1)
     );
 
-    // 3. 第三體月球引力攝動
     const moonPos = getMoonPosition(state.flightTime);
     const rToMoon = moonPos.clone().sub(r);
     const moonAcc = rToMoon.clone().multiplyScalar(MU_MOON / Math.pow(rToMoon.length(), 3))
                     .sub(moonPos.clone().multiplyScalar(MU_MOON / Math.pow(moonPos.length(), 3)));
 
-    // 4. 發動機主動推力
     const thrustVec = state.getThrustVector();
     const thrustAcc = thrustVec.clone().divideScalar(mass);
 
-    // 5. 大氣共轉相對風場阻力
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
@@ -195,11 +186,9 @@ export function rk4Step(state, dt) {
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished) return;
     if (state.v.length() < 0.1) {
-        // 發射瞬間初始俯仰微擾 (Pitch Kick)
         state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), 0.02).normalize();
         return;
     }
-    // 零攻角重力轉向閉環控制
     const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
     const errorAngle = error.length();
     if (errorAngle > 0.0001) {
@@ -244,7 +233,9 @@ export function initRocketScene(containerEl) {
     controls.minDistance = 10000;
     controls.maxDistance = 400000000;
 
-    scene.add(new THREE.DirectionalLight(0xffffff, 2).position.set(100000000, 50000000, 100000000));
+    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    sun.position.set(100000000, 50000000, 100000000);
+    scene.add(sun);
     scene.add(new THREE.AmbientLight(0x223366, 0.5));
 
     earthMesh = new THREE.Mesh(
