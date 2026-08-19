@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控、倒數儀式與動態視角調度
+ * js/rocket_game.js - JarAscent 3D 任務主控與倒數流程
  * @license MIT
  */
 
@@ -9,7 +9,7 @@ import {
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
     getMoonPosition, scene, camera, controls, renderer, rocketGroup, 
     earthMesh, moonMesh, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
-    ENGINE_DATABASE, R_EARTH
+    ENGINE_DATABASE, R_EARTH, WORLD_SCALE
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -19,71 +19,33 @@ let timeScale = 1.0;
 let orbitLine = null;
 const ORBIT_SEGMENTS = 128;
 
-// 倒數與發射狀態機
 let countdownTime = 10;
 let isCountingDown = false;
 let cameraShake = 0;
 
 const I18N = {
     zh: {
-        title: "🚀 躍上天穹 3D",
-        subtitle: "科研級天體動力學與任務制導沙盒",
-        langBtn: "English",
-        toggleUi: "👁️ 隱藏/顯示控制台",
-        configTitle: "🛠️ 任務與火箭構型",
-        lblEngine: "火箭發動機型號:",
-        lblPayload: "載荷艙重量 (kg):",
-        lblThrottle: "節流閥推力 (%):",
-        launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)",
-        stageBtn: "⚡ 手動一級分離 (Stage Separation)",
-        resetBtn: "🔄 重設發射台 (Reset Pad)",
-        telemetryTitle: "⚙️ 實時遙測數據 (240Hz RK4 航天算力)",
-        ready: "發射台準備就緒，請開始發射程序...",
-        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...",
-        liftoff: "🔥 點火升空！Liftoff！Gravity Turn 閉環啟動",
-        meco: "⚠️ 一級主發動機關機 (MECO)，請手動分離！",
+        title: "🚀 躍上天穹 3D", subtitle: "科研級天體動力學與任務制導沙盒",
+        langBtn: "English", toggleUi: "👁️ 隱藏/顯示控制台", configTitle: "🛠️ 任務與火箭構型",
+        lblEngine: "火箭發動機型號:", lblPayload: "載荷艙重量 (kg):", lblThrottle: "節流閥推力 (%):",
+        launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", stageBtn: "⚡ 手動一級分離 (Stage Separation)",
+        resetBtn: "🔄 重設發射台 (Reset Pad)", telemetryTitle: "⚙️ 實時遙測數據 (240Hz RK4 航天算力)",
+        ready: "發射台準備就緒，請點擊發射...", counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...",
+        liftoff: "🔥 點火升空！Liftoff！Gravity Turn 閉環啟動", meco: "⚠️ 一級主發動機關機 (MECO)，請手動分離！",
         orbitSuccess: "🏆【軌道達成】成功注入 300km 近地軌道 (SECO)！",
-        engines: {
-            MERLIN: "梅林發動機 (Merlin 1D)",
-            RAPTOR: "猛禽發動機 (Raptor 2)",
-            HYDROGEN: "氫氧發動機 (RS-25)",
-            SOLID: "固體助推器 (Solid SRB)"
-        },
-        payloads: {
-            "500": "輕型科學衛星 (500 kg)",
-            "2000": "標準通訊衛星 (2,000 kg)",
-            "8000": "載人飛船乘組艙 (8,000 kg)"
-        }
+        engines: { MERLIN: "梅林發動機 (Merlin 1D)", RAPTOR: "猛禽發動機 (Raptor 2)", HYDROGEN: "氫氧發動機 (RS-25)", SOLID: "固體助推器 (Solid SRB)" },
+        payloads: { "500": "輕型科學衛星 (500 kg)", "2000": "標準通訊衛星 (2,000 kg)", "8000": "載人飛船乘組艙 (8,000 kg)" }
     },
     en: {
-        title: "🚀 JarAscent 3D",
-        subtitle: "Aerospace Dynamics & Orbital Sandbox",
-        langBtn: "中文 (繁體)",
-        toggleUi: "👁️ Toggle Flight Panel",
-        configTitle: "🛠️ Mission & Configuration",
-        lblEngine: "Rocket Engine Model:",
-        lblPayload: "Payload Mass (kg):",
-        lblThrottle: "Engine Throttle (%):",
-        launchBtn: "🔥 Initiate T-10s Terminal Countdown",
-        stageBtn: "⚡ Stage Separation",
-        resetBtn: "🔄 Reset Launch Pad",
-        telemetryTitle: "⚙️ Live Telemetry (240Hz RK4 Precision)",
-        ready: "Pad ready. Awaiting launch sequence...",
-        counting: "⚠️ Terminal countdown sequence in progress...",
-        liftoff: "🔥 Main Engine Ignition! Liftoff! Gravity Turn active.",
-        meco: "⚠️ Main Engine Cutoff (MECO). Ready for separation!",
-        orbitSuccess: "🏆【Orbit Inserted】300km Target Orbit Achieved (SECO)!",
-        engines: {
-            MERLIN: "Merlin 1D (RP-1 / LOX)",
-            RAPTOR: "Raptor 2 (Full-Flow Methalox)",
-            HYDROGEN: "RS-25 Hydrolox (High Isp)",
-            SOLID: "Solid Rocket Booster (High Thrust SRB)"
-        },
-        payloads: {
-            "500": "Light Research Satellite (500 kg)",
-            "2000": "Standard Telecom Satellite (2,000 kg)",
-            "8000": "Crewed Orbital Capsule (8,000 kg)"
-        }
+        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & Orbital Sandbox",
+        langBtn: "中文 (繁體)", toggleUi: "👁️ Toggle Flight Panel", configTitle: "🛠️ Mission & Configuration",
+        lblEngine: "Rocket Engine Model:", lblPayload: "Payload Mass (kg):", lblThrottle: "Engine Throttle (%):",
+        launchBtn: "🔥 Initiate T-10s Terminal Countdown", stageBtn: "⚡ Stage Separation", resetBtn: "🔄 Reset Launch Pad",
+        telemetryTitle: "⚙️ Live Telemetry (240Hz RK4 Precision)", ready: "Pad ready. Awaiting launch sequence...",
+        counting: "⚠️ Terminal countdown sequence in progress...", liftoff: "🔥 Main Engine Ignition! Liftoff! Gravity Turn active.",
+        meco: "⚠️ Main Engine Cutoff (MECO). Ready for separation!", orbitSuccess: "🏆【Orbit Inserted】300km Target Orbit Achieved (SECO)!",
+        engines: { MERLIN: "Merlin 1D (RP-1 / LOX)", RAPTOR: "Raptor 2 (Full-Flow Methalox)", HYDROGEN: "RS-25 Hydrolox (High Isp)", SOLID: "Solid Rocket Booster (High Thrust SRB)" },
+        payloads: { "500": "Light Research Satellite (500 kg)", "2000": "Standard Telecom Satellite (2,000 kg)", "8000": "Crewed Orbital Capsule (8,000 kg)" }
     }
 };
 
@@ -95,18 +57,12 @@ function updateStatus(text, color="#38bdf8") {
 
 function applyLanguageUI() {
     const t = I18N[currentLang];
-    setText('ui-title', t.title);
-    setText('ui-subtitle', t.subtitle);
-    setText('btn-lang', t.langBtn);
-    setText('btn-toggle-ui', t.toggleUi);
-    setText('ui-config-title', t.configTitle);
-    setText('lbl-engine', t.lblEngine);
-    setText('lbl-payload', t.lblPayload);
-    setText('lbl-throttle', t.lblThrottle);
-    setText('btn-launch', t.launchBtn);
-    setText('btn-stage', t.stageBtn);
-    setText('btn-reset', t.resetBtn);
-    setText('ui-telemetry-title', t.telemetryTitle);
+    setText('ui-title', t.title); setText('ui-subtitle', t.subtitle);
+    setText('btn-lang', t.langBtn); setText('btn-toggle-ui', t.toggleUi);
+    setText('ui-config-title', t.configTitle); setText('lbl-engine', t.lblEngine);
+    setText('lbl-payload', t.lblPayload); setText('lbl-throttle', t.lblThrottle);
+    setText('btn-launch', t.launchBtn); setText('btn-stage', t.stageBtn);
+    setText('btn-reset', t.resetBtn); setText('ui-telemetry-title', t.telemetryTitle);
     
     ['sel-engine', 'sel-payload'].forEach(id => {
         const sel = document.getElementById(id);
@@ -119,7 +75,7 @@ function initOrbitLine() {
     const positions = new Float32Array((ORBIT_SEGMENTS + 1) * 3);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    orbitLine = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8, linewidth: 2 }));
+    orbitLine = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85, linewidth: 2 }));
     orbitLine.visible = false;
     scene.add(orbitLine);
 }
@@ -138,7 +94,7 @@ function updatePredictedOrbit(state) {
     const pUnit = new THREE.Vector3().crossVectors(hUnit, refVec).normalize();
     const qUnit = new THREE.Vector3().crossVectors(hUnit, pUnit).normalize();
     
-    const p = orbit.semiMajorAxis * (1 - orbit.eccentricity * orbit.eccentricity);
+    const p = orbit.semiMajorAxis * (1 - orbit.eccentricity * orbit.eccentricity) * WORLD_SCALE;
     const positions = orbitLine.geometry.attributes.position.array;
     for (let i = 0; i <= ORBIT_SEGMENTS; i++) {
         const theta = (i / ORBIT_SEGMENTS) * Math.PI * 2;
@@ -197,7 +153,7 @@ function startCountdownSequence() {
         countdownTime--;
         timerText.innerText = `T-${countdownTime}`;
         if (countdownTime <= 3) {
-            timerText.style.color = '#ef4444'; // 最後3秒點火警示紅
+            timerText.style.color = '#ef4444';
         }
         if (countdownTime <= 0) {
             clearInterval(timerInterval);
@@ -224,7 +180,7 @@ function executeLiftoff() {
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
     
-    cameraShake = 1.5; // 觸發起飛鏡頭震撼
+    cameraShake = 1.0;
     updateStatus(I18N[currentLang].liftoff, "#38bdf8");
 }
 
@@ -265,7 +221,7 @@ function gameLoop(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
-    if (moonMesh) moonMesh.position.copy(getMoonPosition(performance.now() / 1000));
+    if (moonMesh) moonMesh.position.copy(getMoonPosition(performance.now() / 1000).multiplyScalar(WORLD_SCALE));
     if (earthMesh) earthMesh.rotation.y += dt * 0.02 * timeScale;
 
     if (rocket && rocket.isLaunched) {
@@ -279,46 +235,37 @@ function gameLoop(now) {
             remainingDt -= stepDt;
         }
 
-        // 🚀 動態視覺縮放 (Dynamic Scale)：在太空軌道中將火箭模型適度放大，確保清晰可見
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
-        const visualScale = (alt < 5000) ? 1.0 : Math.min(200.0, 1.0 + (alt / 10000) * 1.5);
-        rocketGroup.scale.set(visualScale, visualScale, visualScale);
-
-        rocketGroup.position.copy(rocket.r);
+        const visualPos = rocket.r.clone().multiplyScalar(WORLD_SCALE);
         
-        // 火箭姿態朝向推力方向 (+X 為基準對齊)
+        // 太空軌道中將模型適度放大確保可見
+        const visualScale = (alt < 5000) ? 1.0 : Math.min(25.0, 1.0 + (alt / 10000) * 0.5);
+        rocketGroup.scale.set(visualScale, visualScale, visualScale);
+        rocketGroup.position.copy(visualPos);
+        
         const thrustDir = rocket.thrustDir.clone().normalize();
-        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
-        rocketGroup.quaternion.copy(quat);
+        rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
-        // 動態智慧相機跟隨
+        // 平滑跟隨相機
         const orbit = getOrbitalElements(rocket);
-        let camOffsetDist = (alt < 2000) 
-            ? 180 + alt * 0.1 
-            : Math.min(250000, Math.max(1000, alt * 0.6));
-            
-        if (orbit.isOrbital) {
-            camOffsetDist = Math.max(camOffsetDist, orbit.semiMajorAxis * 0.008);
-        }
+        let camDist = (alt < 2000) ? 25 + alt * 0.01 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
+        if (orbit.isOrbital) camDist = Math.max(camDist, orbit.semiMajorAxis * WORLD_SCALE * 1.2);
 
-        // 點火震顫效果
-        const shakeX = (Math.random() - 0.5) * cameraShake * 10;
-        const shakeY = (Math.random() - 0.5) * cameraShake * 10;
+        const shakeX = (Math.random() - 0.5) * cameraShake * 2;
+        const shakeY = (Math.random() - 0.5) * cameraShake * 2;
         if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.5);
 
-        const idealCamPos = rocket.r.clone().add(new THREE.Vector3(camOffsetDist + shakeX, camOffsetDist * 0.4 + shakeY, camOffsetDist * 0.8));
+        const idealCamPos = visualPos.clone().add(new THREE.Vector3(camDist + shakeX, camDist * 0.3 + shakeY, camDist * 0.6));
         camera.position.lerp(idealCamPos, 0.08);
-        controls.target.lerp(rocket.r, 0.1);
+        controls.target.lerp(visualPos, 0.1);
 
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
-            spawnExhaustParticles(rocketGroup.position, rocket.throttle * visualScale);
+            spawnExhaustParticles(visualPos, rocket.throttle * visualScale);
         }
         
-        // 向量箭頭更新 (隨距離動態調整長度，避免遮擋全景)
-        const arrowLen = Math.min(camOffsetDist * 0.4, Math.max(50, alt * 0.05));
-        velArrow.position.copy(rocket.r); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(arrowLen);
-        thrustArrow.position.copy(rocket.r); thrustArrow.setDirection(thrustDir); thrustArrow.setLength(arrowLen * 0.7);
+        velArrow.position.copy(visualPos); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(15);
+        thrustArrow.position.copy(visualPos); thrustArrow.setDirection(thrustDir); thrustArrow.setLength(10);
         velArrow.visible = (alt > 2000); thrustArrow.visible = (alt > 2000 && thrustMag > 0);
 
         updatePredictedOrbit(rocket);
