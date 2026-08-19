@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 姿態徹底修復與高擬真發射場
+ * js/rocket_engine.js - JarAscent 3D 航太動力學與高畫質升空視覺引擎
  * @license MIT
  */
 
@@ -16,7 +16,7 @@ export const J2 = 1.08262668e-3;
 export const WORLD_SCALE = 1000 / R_EARTH; 
 
 export let scene, camera, renderer, controls;
-export let rocketGroup, stage1Mesh, stage2Mesh, machConeMesh, exhaustParticles = [];
+export let rocketGroup, stage1Mesh, stage2Mesh, flameMesh, machConeMesh, exhaustParticles = [];
 export let earthMesh, moonMesh, launchTowerGroup, rocketLight;
 export let velArrow, thrustArrow;
 export let debrisList = [];
@@ -36,8 +36,8 @@ export function getMoonPosition(time) {
 
 export class RocketState {
     constructor() {
-        this.r = new THREE.Vector3(0, R_EARTH, 0); // 垂直坐標：位於北極正上方
-        this.v = new THREE.Vector3(ROTATION_SPEED * R_EARTH, 0, 0);
+        this.r = new THREE.Vector3(0, R_EARTH, 0); // 嚴格置於發射台垂直頂點
+        this.v = new THREE.Vector3(0, 0, 0);       // 修正：地面相對初速為 0，防止橫向失控
         this.mass = 0;
         this.fuel1 = 0;
         this.fuel2 = 0;
@@ -160,16 +160,13 @@ export function computeDerivatives(state, dt) {
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
-        const omegaVec = new THREE.Vector3(0, ROTATION_SPEED, 0);
-        const atmosVel = new THREE.Vector3().crossVectors(omegaVec, r);
-        const relV = v.clone().sub(atmosVel);
-        const speed = relV.length();
+        const speed = v.length();
         if (speed > 0.1) {
             const rho = 1.225 * Math.exp(-alt / 8500);
             const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28;
             const dynQ = 0.5 * rho * speed * speed;
             if (dynQ > state.maxQ) state.maxQ = dynQ;
-            dragAcc = relV.normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
+            dragAcc = v.clone().normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
         }
     }
 
@@ -195,23 +192,33 @@ export function rk4Step(state, dt) {
     state.flightTime += dt;
 }
 
+// 修正：發射前 10 秒純垂直爬升，之後才啟動平滑重力轉向
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished) return;
-    if (state.flightTime < 4.0) return; // 垂直起飛段
-    if (state.flightTime >= 4.0 && state.flightTime < 4.5) {
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.02).normalize();
+    
+    // T+0 ~ T+8s：絕對垂直發射
+    if (state.flightTime < 8.0) {
+        state.thrustDir.set(0, 1, 0);
         return;
     }
-    const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
-    const errorAngle = error.length();
-    if (errorAngle > 0.0001) {
-        state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.8 * dt * 3)).normalize();
+    // T+8s ~ T+12s：微幅初始俯仰傾斜 (Pitch-Over)
+    if (state.flightTime >= 8.0 && state.flightTime < 12.0) {
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.008).normalize();
+        return;
+    }
+    // T+12s 後：零攻角閉環重力轉向
+    if (state.v.length() > 50) {
+        const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
+        const errorAngle = error.length();
+        if (errorAngle > 0.0001) {
+            state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.6 * dt * 2)).normalize();
+        }
     }
 }
 
 export function spawnDebris(state) {
     const debrisGroup = new THREE.Group();
-    const s1Geo = new THREE.CylinderGeometry(0.35, 0.35, 4.8, 24);
+    const s1Geo = new THREE.CylinderGeometry(0.38, 0.38, 6.0, 24);
     const s1Mat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.3 });
     debrisGroup.add(new THREE.Mesh(s1Geo, s1Mat));
     
@@ -220,7 +227,7 @@ export function spawnDebris(state) {
 
     debrisList.push({
         r: state.r.clone(),
-        v: state.v.clone().add(new THREE.Vector3((Math.random()-0.5)*100, -80, (Math.random()-0.5)*100)),
+        v: state.v.clone().add(new THREE.Vector3((Math.random()-0.5)*80, -60, (Math.random()-0.5)*80)),
         mesh: debrisGroup,
         life: 120
     });
@@ -236,8 +243,8 @@ export function updateDebris(dt) {
         d.r.add(d.v.clone().multiplyScalar(dt));
         
         d.mesh.position.copy(d.r.clone().multiplyScalar(WORLD_SCALE));
-        d.mesh.rotation.x += dt * 0.5;
-        d.mesh.rotation.z += dt * 0.3;
+        d.mesh.rotation.x += dt * 0.4;
+        d.mesh.rotation.z += dt * 0.2;
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
             scene.remove(d.mesh);
@@ -252,9 +259,9 @@ function createEarthTexture() {
     const ctx = canvas.getContext('2d');
     
     const oceanGrad = ctx.createLinearGradient(0, 0, 0, 1024);
-    oceanGrad.addColorStop(0, '#0c2d48');
+    oceanGrad.addColorStop(0, '#0a2342');
     oceanGrad.addColorStop(0.5, '#021024');
-    oceanGrad.addColorStop(1, '#0c2d48');
+    oceanGrad.addColorStop(1, '#0a2342');
     ctx.fillStyle = oceanGrad;
     ctx.fillRect(0, 0, 2048, 1024);
     
@@ -298,21 +305,20 @@ export function initRocketScene(containerEl) {
     const height = containerEl.clientHeight || window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 30000);
-    camera.position.set(0, 1007, 24); // 仰視對準火箭發射台
+    camera.position.set(0, 1008, 28); // 正面仰望垂直屹立的火箭
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
-    renderer.shadowMap.enabled = true;
     containerEl.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.minDistance = 2;
     controls.maxDistance = 15000;
-    controls.target.set(0, 1004, 0); // 鎖定火箭重心
+    controls.target.set(0, 1005, 0);
 
     scene.add(createStarField());
 
@@ -321,37 +327,34 @@ export function initRocketScene(containerEl) {
     scene.add(sun);
     scene.add(new THREE.AmbientLight(0x334155, 1.0));
 
-    rocketLight = new THREE.PointLight(0xff6600, 0, 150);
+    // 發動機高光火光
+    rocketLight = new THREE.PointLight(0xff6600, 0, 200);
     scene.add(rocketLight);
 
-    // 地球
     earthMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1000, 64, 64),
         new THREE.MeshStandardMaterial({ map: createEarthTexture(), roughness: 0.8, metalness: 0.1 })
     );
     scene.add(earthMesh);
 
-    // 大氣層發光層
     const atmoMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1012, 48, 48),
         new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, side: THREE.BackSide })
     );
     scene.add(atmoMesh);
 
-    // 月球
     moonMesh = new THREE.Mesh(
         new THREE.SphereGeometry(R_MOON * WORLD_SCALE, 32, 32),
         new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 })
     );
     scene.add(moonMesh);
 
-    // 建造重型立體發射塔
     buildLaunchPadAndTower();
 
-    // 建造垂直航天火箭 (原點對齊噴口)
+    // 建造長征/獵鷹級比例火箭
     rocketGroup = new THREE.Group();
     build3DRocket(rocketGroup);
-    rocketGroup.position.set(0, 1000.8, 0); // 垂直立於排焰台座上方
+    rocketGroup.position.set(0, 1000.8, 0); // 垂直立於發射台之上
     scene.add(rocketGroup);
 
     velArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 10, 0x00ff00);
@@ -359,105 +362,113 @@ export function initRocketScene(containerEl) {
     scene.add(velArrow); scene.add(thrustArrow);
 }
 
-// 建造重型立體鋼構發射台與排焰導流槽
 function buildLaunchPadAndTower() {
     launchTowerGroup = new THREE.Group();
     
-    // 混凝土排焰導流台座
+    // 混凝土台座
     const padMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, metalness: 0.2 });
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 1.6, 32), padMat);
     pad.position.set(0, 1000, 0);
     launchTowerGroup.add(pad);
 
-    // 圓形防焰導流槽開口
-    const trenchMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
-    const trench = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.8, 24), trenchMat);
+    // 排焰口
+    const trenchMat = new THREE.MeshStandardMaterial({ color: 0x0a0f1d });
+    const trench = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.8, 24), trenchMat);
     trench.position.set(0, 1000, 0);
     launchTowerGroup.add(trench);
 
-    // 紅色主桁架發射塔 (立於火箭旁側)
+    // 紅色主桁架發射塔 (立於火箭側邊)
     const towerMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.5, roughness: 0.4 });
     const tower = new THREE.Group();
     
-    // 4 根垂直主立柱
-    const colGeo = new THREE.CylinderGeometry(0.1, 0.1, 10, 8);
-    [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]].forEach(([cx, cz]) => {
+    const colGeo = new THREE.CylinderGeometry(0.12, 0.12, 13, 8);
+    [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]].forEach(([cx, cz]) => {
         const col = new THREE.Mesh(colGeo, towerMat);
-        col.position.set(cx, 5, cz);
+        col.position.set(cx, 6.5, cz);
         tower.add(col);
     });
 
-    // 橫向與斜向加固梁
-    for (let y = 1; y <= 9; y += 1.5) {
-        const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.08), towerMat); b1.position.set(0, y, 0.8); tower.add(b1);
-        const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.08), towerMat); b2.position.set(0, y, -0.8); tower.add(b2);
-        const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.6), towerMat); b3.position.set(0.8, y, 0); tower.add(b3);
-        const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.6), towerMat); b4.position.set(-0.8, y, 0); tower.add(b4);
+    for (let y = 1; y <= 12; y += 1.5) {
+        const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.08), towerMat); b1.position.set(0, y, 0.9); tower.add(b1);
+        const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.08), towerMat); b2.position.set(0, y, -0.9); tower.add(b2);
+        const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.8), towerMat); b3.position.set(0.9, y, 0); tower.add(b3);
+        const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.8), towerMat); b4.position.set(-0.9, y, 0); tower.add(b4);
     }
 
-    // 擺式加注臂 (Swing Arm)
     const armMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.8 });
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 0.25), armMat);
-    arm.position.set(-0.9, 7.5, 0);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.25, 0.25), armMat);
+    arm.position.set(-1.0, 9.5, 0);
     tower.add(arm);
 
-    tower.position.set(2.6, 1000.8, 0);
+    tower.position.set(2.8, 1000.8, 0);
     launchTowerGroup.add(tower);
 
-    // 避雷針塔
-    [-4, 4].forEach(x => {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.15, 12, 8), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
-        pole.position.set(x, 1006, -2);
+    [-4.5, 4.5].forEach(x => {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.15, 14, 8), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+        pole.position.set(x, 1007, -2.5);
         launchTowerGroup.add(pole);
     });
 
     scene.add(launchTowerGroup);
 }
 
-// 建造垂直航天火箭 (原點 y=0 為噴口底部)
+// 建造長征級細長火箭與高亮白熱主火柱
 function build3DRocket(group) {
-    const matWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.7, roughness: 0.2 });
-    const matBlue = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8, roughness: 0.3 });
+    const matWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.6, roughness: 0.2 });
+    const matAccent = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.3 });
     const matEngine = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95, roughness: 0.1 });
 
-    // 一級主發動機噴管 (y=0 ~ y=0.6)
-    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 24), matEngine);
+    // 🔥 [央視升空圖同款] 實體白熱錐形電漿火焰 (Exhaust Flame Column)
+    const flameGeo = new THREE.ConeGeometry(0.45, 4.5, 24);
+    const flameMat = new THREE.MeshBasicMaterial({
+        color: 0xffeedd,
+        transparent: true,
+        opacity: 0.95
+    });
+    flameMesh = new THREE.Mesh(flameGeo, flameMat);
+    flameMesh.position.y = -2.25; // 噴嘴下方
+    flameMesh.rotation.x = Math.PI; // 錐尖朝下
+    flameMesh.visible = false; // 未點火前隱藏
+    group.add(flameMesh);
+
+    // 一級主發動機噴嘴
+    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 24), matEngine);
     nozzle.position.y = 0.3;
     group.add(nozzle);
 
-    // 一級箭體 (y=0.6 ~ y=5.0)
-    stage1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 4.4, 32), matWhite);
-    stage1Mesh.position.y = 2.8;
+    // 一級主火箭 (y=0.6 ~ y=5.6)
+    stage1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 5.0, 32), matWhite);
+    stage1Mesh.position.y = 3.1;
     group.add(stage1Mesh);
 
-    // 二級箭體 (y=5.0 ~ y=6.6)
-    stage2Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 1.6, 32), matBlue);
-    stage2Mesh.position.y = 5.8;
+    // 二級火箭 (y=5.6 ~ y=8.0)
+    stage2Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 2.4, 32), matAccent);
+    stage2Mesh.position.y = 6.8;
     group.add(stage2Mesh);
 
-    // 整流罩鼻錐 (y=6.6 ~ y=8.0)
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.33, 1.4, 32), matWhite);
-    nose.position.y = 7.3;
+    // 空氣動力整流罩鼻錐 (y=8.0 ~ y=9.6)
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.6, 32), matWhite);
+    nose.position.y = 8.8;
     group.add(nose);
 
-    // 音障馬赫錐 (未突破音障前完全隱形)
-    const coneGeo = new THREE.ConeGeometry(1.2, 1.8, 32, 1, true);
+    // 音障馬赫錐
+    const coneGeo = new THREE.ConeGeometry(1.4, 2.0, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
-    machConeMesh.position.y = 5.5;
+    machConeMesh.position.y = 6.5;
     group.add(machConeMesh);
 
-    // 4 片黑色鈦合金格柵舵
+    // 4 片格柵舵
     for (let i = 0; i < 4; i++) {
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.6, 0.5), matEngine);
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.7, 0.6), matEngine);
         const angle = (i / 4) * Math.PI * 2;
-        fin.position.set(Math.cos(angle) * 0.4, 1.2, Math.sin(angle) * 0.4);
+        fin.position.set(Math.cos(angle) * 0.44, 1.2, Math.sin(angle) * 0.44);
         fin.rotation.y = -angle;
         stage1Mesh.add(fin);
     }
 }
 
-// 產生具備地面導流風偏與橫向膨脹的排焰煙雲
+// 產生滾滾發射煙浪
 export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
     if (exhaustParticles.length > 250) return;
     
@@ -472,7 +483,7 @@ export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
         const p = new THREE.Mesh(
             new THREE.SphereGeometry(size, 6, 6),
             new THREE.MeshBasicMaterial({
-                color: isFire ? (Math.random() > 0.5 ? 0xff4400 : 0xffaa00) : 0xe2e8f0,
+                color: isFire ? (Math.random() > 0.5 ? 0xff5500 : 0xffbb00) : 0xe2e8f0,
                 transparent: true,
                 opacity: 0.9
             })
@@ -480,7 +491,7 @@ export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
 
         p.position.set(
             pos.x + (Math.random() - 0.5) * 0.4,
-            pos.y,
+            pos.y - 0.5,
             pos.z + (Math.random() - 0.5) * 0.4
         );
         scene.add(p);
@@ -488,7 +499,7 @@ export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
         exhaustParticles.push({
             mesh: p,
             vx: (Math.random() - 0.5) * spread + windDir.x * 1.2,
-            vy: -(4 + Math.random() * 6) * power * upwardBias,
+            vy: -(5 + Math.random() * 6) * power * upwardBias,
             vz: (Math.random() - 0.5) * spread + windDir.z * 1.2,
             expansion: isLowAltitude ? 1.06 : 1.03,
             life: 1.0
