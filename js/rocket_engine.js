@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 物理核心與 3D 火箭工廠
+ * js/rocket_engine.js - JarAscent 3D 物理引擎 + 貼合幾何體
  * @license MIT
  */
 
@@ -229,7 +229,6 @@ export function computeDerivatives(state, dt) {
 
     state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
 
-    // 🛡️ WGS-84 大氣共轉相對風場
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
@@ -561,7 +560,7 @@ export function initRocketScene(containerEl) {
     const height = containerEl.clientHeight || window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 30000);
-    camera.position.set(0, 1008, 30);
+    camera.position.set(0, 1012, 35); // 稍微拉開視野
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
