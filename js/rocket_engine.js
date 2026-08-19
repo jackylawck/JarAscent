@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 物理與渲染引擎 (解耦視覺與物理尺度)
+ * js/rocket_engine.js - JarAscent 3D 航太動力學與好萊塢特效核心
  * @license MIT
  */
 
@@ -13,13 +13,15 @@ export const MOON_ORBIT_RADIUS = 384400000;
 export const ROTATION_SPEED = 7.292115e-5;
 export const J2 = 1.08262668e-3;
 
-// 視覺渲染縮放常數：將 6378km 地球映射至 1000 Three.js 單位
 export const WORLD_SCALE = 1000 / R_EARTH; 
 
 export let scene, camera, renderer, controls;
-export let rocketGroup, exhaustParticles = [];
+export let rocketGroup, stage1Mesh, stage2Mesh, machConeMesh, exhaustParticles = [];
 export let earthMesh, moonMesh, launchTowerGroup;
 export let velArrow, thrustArrow;
+
+// 獨立一級碎片陣列
+export let debrisList = [];
 
 export const ENGINE_DATABASE = Object.freeze({
     MERLIN:   Object.freeze({ name: "Merlin 1D",   thrustSea: 845000,  thrustVac: 981000,  ispSea: 282, ispVac: 311, dryMassStage1: 22000, fuelMassStage1: 410000, dryMassStage2: 4000, fuelMassStage2: 92000 }),
@@ -53,6 +55,10 @@ export class RocketState {
         this.targetPeriapsis = 300000;
         this.targetApoapsis = 300000;
         this.missionAccomplished = false;
+        
+        // 統計評級指標
+        this.maxVelocity = 0;
+        this.maxQ = 0;
     }
 
     initEngine(engineKey, payloadMass) {
@@ -161,7 +167,9 @@ export function computeDerivatives(state, dt) {
         if (speed > 0.1) {
             const rho = 1.225 * Math.exp(-alt / 8500);
             const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28;
-            dragAcc = relV.normalize().multiplyScalar(-0.5 * rho * speed * speed * Cd * 10.5 / mass);
+            const dynQ = 0.5 * rho * speed * speed;
+            if (dynQ > state.maxQ) state.maxQ = dynQ;
+            dragAcc = relV.normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
         }
     }
 
@@ -176,6 +184,8 @@ export function rk4Step(state, dt) {
 
     state.r.add( s1.dr.clone().multiplyScalar(dt/6).add(s2.dr.clone().multiplyScalar(dt/3)).add(s3.dr.clone().multiplyScalar(dt/3)).add(s4.dr.clone().multiplyScalar(dt/6)) );
     state.v.add( s1.dv.clone().multiplyScalar(dt/6).add(s2.dv.clone().multiplyScalar(dt/3)).add(s3.dv.clone().multiplyScalar(dt/3)).add(s4.dv.clone().multiplyScalar(dt/6)) );
+
+    if (state.v.length() > state.maxVelocity) state.maxVelocity = state.v.length();
 
     const thrustMag = state.getThrustVector().length();
     const consumed = (thrustMag > 0 ? thrustMag / (state.getIsp() * 9.80665) : 0) * dt;
@@ -196,6 +206,44 @@ export function executeGuidance(state, dt) {
     const errorAngle = error.length();
     if (errorAngle > 0.0001) {
         state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.6 * dt * 3)).normalize();
+    }
+}
+
+// 獨立一級殘骸拋物線物理演算
+export function spawnDebris(state) {
+    const debrisGroup = new THREE.Group();
+    const s1Geo = new THREE.CylinderGeometry(0.3, 0.3, 4.2, 16);
+    const s1Mat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
+    debrisGroup.add(new THREE.Mesh(s1Geo, s1Mat));
+    
+    debrisGroup.position.copy(state.r.clone().multiplyScalar(WORLD_SCALE));
+    scene.add(debrisGroup);
+
+    debrisList.push({
+        r: state.r.clone(),
+        v: state.v.clone().add(new THREE.Vector3((Math.random()-0.5)*100, -50, (Math.random()-0.5)*100)),
+        mesh: debrisGroup,
+        life: 120
+    });
+}
+
+export function updateDebris(dt) {
+    for (let i = debrisList.length - 1; i >= 0; i--) {
+        const d = debrisList[i];
+        d.life -= dt;
+        const rMag = d.r.length();
+        const grav = d.r.clone().multiplyScalar(-MU / Math.pow(rMag, 3));
+        d.v.add(grav.multiplyScalar(dt));
+        d.r.add(d.v.clone().multiplyScalar(dt));
+        
+        d.mesh.position.copy(d.r.clone().multiplyScalar(WORLD_SCALE));
+        d.mesh.rotation.x += dt * 0.5;
+        d.mesh.rotation.z += dt * 0.3;
+
+        if (d.life <= 0 || d.r.length() < R_EARTH) {
+            scene.remove(d.mesh);
+            debrisList.splice(i, 1);
+        }
     }
 }
 
@@ -249,9 +297,8 @@ export function initRocketScene(containerEl) {
     const width = containerEl.clientWidth || window.innerWidth;
     const height = containerEl.clientHeight || window.innerHeight;
 
-    // 穩健相機視錐（解耦後的世界坐標系：near=1, far=30000）
     camera = new THREE.PerspectiveCamera(45, width / height, 1, 30000);
-    camera.position.set(1005, 10, 30); // 正確近距離對準發射台
+    camera.position.set(1005, 10, 30);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
@@ -271,21 +318,18 @@ export function initRocketScene(containerEl) {
     scene.add(sun);
     scene.add(new THREE.AmbientLight(0x223366, 0.8));
 
-    // 地球 (半徑 1000)
     earthMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1000, 64, 64),
         new THREE.MeshPhongMaterial({ map: createEarthTexture(), specular: 0x112244, shininess: 15 })
     );
     scene.add(earthMesh);
 
-    // 大氣層光暈
     const atmoMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1015, 48, 48),
         new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, side: THREE.BackSide })
     );
     scene.add(atmoMesh);
 
-    // 月球
     moonMesh = new THREE.Mesh(
         new THREE.SphereGeometry(R_MOON * WORLD_SCALE, 32, 32),
         new THREE.MeshPhongMaterial({ color: 0xcccccc, emissive: 0x111111 })
@@ -306,21 +350,13 @@ export function initRocketScene(containerEl) {
 
 function buildLaunchPadAndTower() {
     launchTowerGroup = new THREE.Group();
-    
-    const pad = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 10, 10), 
-        new THREE.MeshStandardMaterial({ color: 0x334155 })
-    );
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(4, 10, 10), new THREE.MeshStandardMaterial({ color: 0x334155 }));
     pad.position.set(999, 0, 0);
     launchTowerGroup.add(pad);
 
-    const tower = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 1.5, 1.5), 
-        new THREE.MeshStandardMaterial({ color: 0xb91c1c })
-    );
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(10, 1.5, 1.5), new THREE.MeshStandardMaterial({ color: 0xb91c1c }));
     tower.position.set(1003, 3, -1.5);
     launchTowerGroup.add(tower);
-
     scene.add(launchTowerGroup);
 }
 
@@ -329,24 +365,32 @@ function build3DRocket(group) {
     const matBlue = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.3 });
     const matEngine = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.1 });
 
-    const s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.2, 16), matWhite);
-    s1.position.y = 2.1; group.add(s1);
+    stage1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.2, 16), matWhite);
+    stage1Mesh.position.y = 2.1;
+    group.add(stage1Mesh);
 
     const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 16), matEngine);
-    nozzle.position.y = -0.1; group.add(nozzle);
+    nozzle.position.y = -0.1; stage1Mesh.add(nozzle);
 
-    const s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 1.6, 16), matBlue);
-    s2.position.y = 5.0; group.add(s2);
+    stage2Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 1.6, 16), matBlue);
+    stage2Mesh.position.y = 5.0; group.add(stage2Mesh);
 
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 16), matWhite);
     nose.position.y = 6.4; group.add(nose);
+
+    // 🌊 音障馬赫錐激波環 (Mach Cone Vapor Cone)
+    const coneGeo = new THREE.ConeGeometry(1.2, 1.8, 32, 1, true);
+    const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
+    machConeMesh = new THREE.Mesh(coneGeo, coneMat);
+    machConeMesh.position.y = 4.5;
+    group.add(machConeMesh);
 
     for (let i = 0; i < 4; i++) {
         const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.6, 0.5), matEngine);
         const angle = (i / 4) * Math.PI * 2;
         fin.position.set(Math.cos(angle) * 0.35, 0.6, Math.sin(angle) * 0.35);
         fin.rotation.y = -angle;
-        group.add(fin);
+        stage1Mesh.add(fin);
     }
 }
 
