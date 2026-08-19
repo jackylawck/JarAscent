@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換 (修復升空倒數)
+ * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換 (全選項翻譯 + 升空視角拉開)
  * @license MIT
  */
 
@@ -66,6 +66,16 @@ const I18N = {
         tSma: "軌道半長軸 Semi-a", tMoon: "地月即時距離",
         onPad: "發射台地面 (On Pad)", ascending: "主動爬升段 (Ascending)", stableOrbit: "🟢 300km 圓軌道 (LEO Orbit)",
         abortTitle: "💥 任務異常中止 (RUD Failure)", abortRestart: "🔄 重新設定並再次發射",
+        envOptions: {
+            DAY: "☀️ 白天發射 (Day Launch)",
+            NIGHT: "🌙 夜間發射 (Night Launch)"
+        },
+        payloadOptions: {
+            "8000": "新一代載人飛船 (8,000 kg)",
+            "15000": "空間站核心艙 (15,000 kg)",
+            "35000": "重型貨運補給艙 (35,000 kg)",
+            "60000": "極限超重載荷 (60,000 kg) ⚠️"
+        },
         milestones: {
             escape: "🚀 T+120s 拋掉逃逸塔 (Tower Jettison)!",
             boosters: "⚡ T+160s 助推器與一級分離!",
@@ -97,6 +107,16 @@ const I18N = {
         tSma: "Semi-major Axis", tMoon: "Lunar Distance",
         onPad: "Vehicle on Pad (Pre-Ignition)", ascending: "Active Ascent Phase", stableOrbit: "🟢 300km Stable Orbit",
         abortTitle: "💥 Catastrophic Mission Abort", abortRestart: "🔄 Re-Configure & Launch Again",
+        envOptions: {
+            DAY: "☀️ Day Launch (Sunny)",
+            NIGHT: "🌙 Night Launch (Starfield)"
+        },
+        payloadOptions: {
+            "8000": "Crewed Spacecraft (8,000 kg)",
+            "15000": "Space Station Module (15,000 kg)",
+            "35000": "Heavy Cargo Pod (35,000 kg)",
+            "60000": "Extreme Overload Pod (60,000 kg) ⚠️"
+        },
         milestones: {
             escape: "🚀 T+120s Launch Escape Tower Jettison!",
             boosters: "⚡ T+160s Boosters & Stage 1 Separation!",
@@ -162,6 +182,21 @@ function applyLanguageUI() {
     setText('lbl-t-ecc', t.tEcc);
     setText('lbl-t-sma', t.tSma);
     setText('lbl-t-moon', t.tMoon);
+
+    // 🚀 更新所有下拉選單（環境、火箭、載荷）
+    const selEnv = document.getElementById('sel-env');
+    if (selEnv) {
+        Array.from(selEnv.options).forEach(opt => {
+            if (t.envOptions[opt.value]) opt.text = t.envOptions[opt.value];
+        });
+    }
+
+    const selPayload = document.getElementById('sel-payload');
+    if (selPayload) {
+        Array.from(selPayload.options).forEach(opt => {
+            if (t.payloadOptions[opt.value]) opt.text = t.payloadOptions[opt.value];
+        });
+    }
 
     const selEngine = document.getElementById('sel-engine');
     if (selEngine) {
@@ -601,8 +636,9 @@ function gameLoop(now) {
 
         switch (currentCamMode) {
             case CAM_MODE.LIFTOFF:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-18 + shakeX, 8 + shakeY, 18)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 5, 0)));
+                // 🚀 修復低空鏡頭：固定相機在發射場斜上方，讓玩家清楚看見火箭從發射台向上直衝拔起！
+                targetCamPos.set(0, 1014 + shakeY, 32 + shakeX);
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
             case CAM_MODE.MAX_Q:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(35 + shakeX, 5 + shakeY, 0)));
@@ -619,7 +655,7 @@ function gameLoop(now) {
                 break;
             case CAM_MODE.ASCEND:
             default:
-                let camDist = (alt < 2000) ? 25 + alt * 0.01 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
+                let camDist = (alt < 2000) ? 30 + alt * 0.015 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
                 targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
