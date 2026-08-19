@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (燃料持續燃燒 + 視覺白錐修復)
+ * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
  * @license MIT
  */
 
@@ -13,11 +13,11 @@ import {
 import { ROCKET_MODELS } from './rockets_data.js';
 
 import { 
-    initRocketScene, switchRocketMesh, updateEnvironmentVisuals,
+    initRocketScene, setEnvironmentMode, switchRocketMesh, updateEnvironmentVisuals,
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles,
     scene, camera, controls, renderer, rocketGroup, flameMesh,
-    machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
+    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -262,7 +262,6 @@ function updateTelemetryValues() {
     if (qBar) qBar.style.width = `${Math.min(100, (dynQkPa / 55) * 100)}%`;
     setText('gauge-q-txt', `${dynQkPa.toFixed(1)} kPa`);
     
-    // 💨 修復馬赫錐：平時完全隱藏 (visible = false)，跨音速時才顯示半透明蒸氣
     if (machConeMesh) {
         const isTransonic = (airSpeed > 320 && airSpeed < 430 && alt < 25000);
         machConeMesh.visible = isTransonic;
@@ -329,11 +328,9 @@ function startCountdownSequence() {
     }, 1000);
 }
 
-// 🚀 修正點火初始化：保證燃料充足，推力持續燃燒！
 function executeLiftoff() {
     let engKey = document.getElementById('sel-engine').value;
     
-    // 簡易模式固定 100% 燃料與最優參數
     let payload = isAdvancedMode ? (parseInt(document.getElementById('sel-payload').value, 10) || 8000) : 8000;
     let fuelFactor = isAdvancedMode ? ((parseInt(document.getElementById('rng-fuel').value, 10) || 100) / 100) : 1.0;
     let throttle = isAdvancedMode ? ((parseInt(document.getElementById('rng-throttle').value, 10) || 100) / 100) : 1.0;
@@ -410,7 +407,6 @@ function gameLoop(now) {
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
         const speed = rocket.v.length();
         
-        // 🌌 動態更新太空黑漸變背景
         updateEnvironmentVisuals(alt);
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
@@ -456,7 +452,6 @@ function gameLoop(now) {
 
         camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.09);
 
-        // 🔥 尾焰與光源渲染控制
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
             if (flameMesh) { 
