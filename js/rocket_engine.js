@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 航太動力學與好萊塢特效核心
+ * js/rocket_engine.js - JarAscent 3D 航太動力學與集群發動機核心
  * @license MIT
  */
 
@@ -19,15 +19,14 @@ export let scene, camera, renderer, controls;
 export let rocketGroup, stage1Mesh, stage2Mesh, machConeMesh, exhaustParticles = [];
 export let earthMesh, moonMesh, launchTowerGroup;
 export let velArrow, thrustArrow;
-
-// 獨立一級碎片陣列
 export let debrisList = [];
 
+// 🚀 正式升級：一級推力乘以對應發動機集群數量，保證 TWR > 1.4 順利爬升
 export const ENGINE_DATABASE = Object.freeze({
-    MERLIN:   Object.freeze({ name: "Merlin 1D",   thrustSea: 845000,  thrustVac: 981000,  ispSea: 282, ispVac: 311, dryMassStage1: 22000, fuelMassStage1: 410000, dryMassStage2: 4000, fuelMassStage2: 92000 }),
-    RAPTOR:   Object.freeze({ name: "Raptor 2",    thrustSea: 2250000, thrustVac: 2500000, ispSea: 327, ispVac: 363, dryMassStage1: 35000, fuelMassStage1: 800000, dryMassStage2: 7000, fuelMassStage2: 180000 }),
-    HYDROGEN: Object.freeze({ name: "RS-25",       thrustSea: 1860000, thrustVac: 2279000, ispSea: 366, ispVac: 452, dryMassStage1: 30000, fuelMassStage1: 650000, dryMassStage2: 5000, fuelMassStage2: 120000 }),
-    SOLID:    Object.freeze({ name: "Solid SRB",   thrustSea: 3100000, thrustVac: 3300000, ispSea: 242, ispVac: 268, dryMassStage1: 45000, fuelMassStage1: 500000, dryMassStage2: 4500, fuelMassStage2: 85000 })
+    MERLIN:   Object.freeze({ name: "Merlin 9x",   thrustSea: 845000 * 9,   thrustVac: 981000 * 9,   ispSea: 282, ispVac: 311, dryMassStage1: 22000, fuelMassStage1: 410000, dryMassStage2: 4000, fuelMassStage2: 92000, thrustStage2: 981000 }),
+    RAPTOR:   Object.freeze({ name: "Raptor 3x",   thrustSea: 2250000 * 3,  thrustVac: 2500000 * 3,  ispSea: 327, ispVac: 363, dryMassStage1: 35000, fuelMassStage1: 600000, dryMassStage2: 7000, fuelMassStage2: 120000, thrustStage2: 2500000 }),
+    HYDROGEN: Object.freeze({ name: "RS-25 4x",    thrustSea: 1860000 * 4,  thrustVac: 2279000 * 4,  ispSea: 366, ispVac: 452, dryMassStage1: 30000, fuelMassStage1: 500000, dryMassStage2: 5000, fuelMassStage2: 100000, thrustStage2: 1860000 }),
+    SOLID:    Object.freeze({ name: "Solid SRB 2x", thrustSea: 3500000 * 2, thrustVac: 3800000 * 2, ispSea: 242, ispVac: 268, dryMassStage1: 45000, fuelMassStage1: 400000, dryMassStage2: 4500, fuelMassStage2: 70000, thrustStage2: 1200000 })
 });
 
 export function getMoonPosition(time) {
@@ -56,7 +55,6 @@ export class RocketState {
         this.targetApoapsis = 300000;
         this.missionAccomplished = false;
         
-        // 統計評級指標
         this.maxVelocity = 0;
         this.maxQ = 0;
     }
@@ -82,17 +80,17 @@ export class RocketState {
         if (this.missionAccomplished) return new THREE.Vector3(0,0,0);
 
         const alt = this.r.length() - R_EARTH;
-        const altRatio = Math.min(1, Math.max(0, alt / 100000));
+        const altRatio = Math.min(1, Math.max(0, alt / 80000));
         let baseThrust = (this.stage === 1) 
             ? this.engine.thrustSea + (this.engine.thrustVac - this.engine.thrustSea) * altRatio
-            : this.engine.thrustVac * 0.65;
+            : this.engine.thrustStage2;
 
-        if (this.guidanceActive) {
+        if (this.guidanceActive && this.stage === 2) {
             const orbit = getOrbitalElements(this);
             const periError = (orbit.periapsis - this.targetPeriapsis) / this.targetPeriapsis;
             const apoError = (orbit.apoapsis - this.targetApoapsis) / this.targetApoapsis;
             if (periError > -0.02 && apoError > -0.02) {
-                const taper = Math.max(0.05, 1.0 - (periError + apoError) * 2);
+                const taper = Math.max(0.1, 1.0 - (periError + apoError) * 2);
                 baseThrust *= taper;
                 if (periError > 0.01 && apoError > 0.01) {
                     this.missionAccomplished = true;
@@ -105,7 +103,7 @@ export class RocketState {
 
     getIsp() {
         const alt = this.r.length() - R_EARTH;
-        const altRatio = Math.min(1, Math.max(0, alt / 100000));
+        const altRatio = Math.min(1, Math.max(0, alt / 80000));
         return this.engine.ispSea + (this.engine.ispVac - this.engine.ispSea) * altRatio;
     }
 }
@@ -197,19 +195,19 @@ export function rk4Step(state, dt) {
 
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished) return;
-    if (state.flightTime < 3.0) return;
-    if (state.flightTime >= 3.0 && state.flightTime < 3.5) {
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,1,0), -0.015).normalize();
+    if (state.flightTime < 4.0) return; // 垂直起飛段
+    if (state.flightTime >= 4.0 && state.flightTime < 4.5) {
+        // 重力轉向初始俯仰傾斜
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,1,0), -0.02).normalize();
         return;
     }
     const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
     const errorAngle = error.length();
     if (errorAngle > 0.0001) {
-        state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.6 * dt * 3)).normalize();
+        state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.8 * dt * 3)).normalize();
     }
 }
 
-// 獨立一級殘骸拋物線物理演算
 export function spawnDebris(state) {
     const debrisGroup = new THREE.Group();
     const s1Geo = new THREE.CylinderGeometry(0.3, 0.3, 4.2, 16);
@@ -221,7 +219,7 @@ export function spawnDebris(state) {
 
     debrisList.push({
         r: state.r.clone(),
-        v: state.v.clone().add(new THREE.Vector3((Math.random()-0.5)*100, -50, (Math.random()-0.5)*100)),
+        v: state.v.clone().add(new THREE.Vector3((Math.random()-0.5)*100, -80, (Math.random()-0.5)*100)),
         mesh: debrisGroup,
         life: 120
     });
@@ -293,12 +291,13 @@ function createStarField() {
 export function initRocketScene(containerEl) {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x010409);
+    scene.fog = new THREE.FogExp2(0x010409, 0.00015); // 大氣透視柔和霧效
 
     const width = containerEl.clientWidth || window.innerWidth;
     const height = containerEl.clientHeight || window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(45, width / height, 1, 30000);
-    camera.position.set(1005, 10, 30);
+    camera.position.set(1005, 8, 25);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
@@ -378,7 +377,6 @@ function build3DRocket(group) {
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 16), matWhite);
     nose.position.y = 6.4; group.add(nose);
 
-    // 🌊 音障馬赫錐激波環 (Mach Cone Vapor Cone)
     const coneGeo = new THREE.ConeGeometry(1.2, 1.8, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
