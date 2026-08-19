@@ -4,13 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <!-- 🛡️ [資安核心] 嚴格內容安全策略 (CSP) 與防禦標頭 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self';">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     
     <title>🚀 躍上天穹 3D | JarAscent 3D</title>
-    <meta name="description" content="獻給 Jarvis 上桓：純本地 WebGL 3D 航太級天體動力學與任務制導沙盒。">
-    <meta name="author" content="Jacky Law">
+    <meta name="description" content="純本地 WebGL 3D 航太級天體動力學與任務制導沙盒。">
     <meta name="theme-color" content="#030712">
 
     <style>
@@ -39,9 +37,9 @@
         .toggle-ui-btn { position: fixed; bottom: 15px; left: 15px; z-index: 200; background: linear-gradient(135deg, #38bdf8, #818cf8); color: #030712; font-weight: 800; border: none; padding: 8px 14px; border-radius: 20px; font-size: 0.78rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.5); }
     </style>
 
-    <!-- Three.js & OrbitControls -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+    <!-- 載入 Three.js 全域函式庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <button class="toggle-ui-btn" id="btn-toggle-ui">👁️ 隱藏/顯示控制台</button>
@@ -52,7 +50,7 @@
                 <h1 id="ui-title">🚀 躍上天穹 3D</h1>
                 <button class="lang-btn" id="btn-lang">English</button>
             </div>
-            <p id="ui-subtitle">獻給 Jarvis 上桓：科研級天體動力學與任務制導沙盒</p>
+            <p id="ui-subtitle">科研級天體動力學與任務制導沙盒</p>
 
             <div class="config-panel">
                 <h3 id="ui-config-title">🛠️ 任務與火箭構型</h3>
@@ -83,7 +81,6 @@
             <button class="btn" id="btn-launch">🔥 點火發射 (Launch T-0)</button>
             <button class="btn btn-stage" id="btn-stage" style="display:none;">⚡ 手動一級分離 (Stage Separation)</button>
             
-            <!-- 時間倍速控制 -->
             <div style="display: flex; gap: 8px; margin: 6px 0; justify-content: center;">
                 <button id="btn-time-slower" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">⏪ 減速</button>
                 <span id="time-scale-display" style="color: #94a3b8; font-size: 0.8rem; align-self: center; font-weight: bold;">倍速: 1.0x</span>
@@ -92,7 +89,6 @@
             
             <button class="btn btn-reset" id="btn-reset">🔄 重設發射台 (Reset Pad)</button>
 
-            <!-- 科研遙測面板 -->
             <div class="debug-panel" id="physics-debug-box">
                 <h4 id="ui-telemetry-title">⚙️ 實時遙測數據 (240Hz RK4 航天算力)</h4>
                 <div id="telemetry-content">
