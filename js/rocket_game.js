@@ -50,7 +50,7 @@ let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: f
 
 const I18N = {
     zh: {
-        title: "🚀 躍上天穹 3D",
+        title: "🚀 躍上穹蒼 3D",
         subtitle: "航太級天體動力學、真實多級分離與結構極限沙盒",
         langBtn: "English",
         toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
