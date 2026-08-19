@@ -1,6 +1,8 @@
 /**
- * js/rockets_data.js - 全球火箭規格與多語系字典
+ * js/rockets_data.js - 全球火箭規格、塗裝與多語系字典
+ * @license MIT
  */
+
 export const ROCKET_MODELS = Object.freeze({
     CZ10A: {
         name: "長征十號甲 (CZ-10A 登月載人)", nameEn: "Long March 10A (CZ-10A Lunar)",
