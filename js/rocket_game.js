@@ -2,7 +2,10 @@
  * js/rocket_game.js - JarAscent 3D 任務控制台與 UI 交互
  * @license MIT
  */
-import * as THREE from 'three';
+
+// 直接使用全域 window.THREE
+const THREE = window.THREE;
+
 import { 
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
     getMoonPosition, scene, camera, controls, renderer, rocketGroup, 
@@ -20,7 +23,7 @@ const ORBIT_SEGMENTS = 128;
 const I18N = {
     zh: {
         title: "🚀 躍上天穹 3D",
-        subtitle: "獻給 Jarvis 上桓：科研級天體動力學與任務制導沙盒",
+        subtitle: "科研級天體動力學與任務制導沙盒",
         langBtn: "English",
         toggleUi: "👁️ 隱藏/顯示控制台",
         configTitle: "🛠️ 任務與火箭構型",
@@ -49,7 +52,7 @@ const I18N = {
     },
     en: {
         title: "🚀 JarAscent 3D",
-        subtitle: "Dedicated to Jarvis: Aerospace Dynamics & Orbital Sandbox",
+        subtitle: "Aerospace Dynamics & Orbital Sandbox",
         langBtn: "中文 (繁體)",
         toggleUi: "👁️ Toggle Flight Panel",
         configTitle: "🛠️ Mission & Configuration",
@@ -78,7 +81,6 @@ const I18N = {
     }
 };
 
-// 🛡️ [資安防禦] 嚴格使用 innerText 更新文字，杜絕 XSS
 function setText(id, text) { const el = document.getElementById(id); if (el) el.innerText = text; }
 function updateStatus(text, color="#38bdf8") { 
     const el = document.getElementById('flight-status'); 
@@ -125,7 +127,6 @@ function updatePredictedOrbit(state) {
     if (h.lengthSq() < 1e-12) { orbitLine.visible = false; return; }
     const hUnit = h.normalize();
     
-    // 建立無奇異點的軌道正交基底
     let refVec = new THREE.Vector3(1,0,0);
     if (Math.abs(hUnit.dot(refVec)) > 0.99) refVec.set(0,0,1);
     const pUnit = new THREE.Vector3().crossVectors(hUnit, refVec).normalize();
@@ -218,7 +219,6 @@ function bindUI() {
         box.style.display = box.style.display === 'none' ? 'block' : 'none';
     };
 
-    // 時間加速按鈕
     const updateTimeDisplay = () => setText('time-scale-display', `倍速: ${timeScale.toFixed(1)}x`);
     document.getElementById('btn-time-slower').onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); };
     document.getElementById('btn-time-faster').onclick = () => { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); };
@@ -259,7 +259,6 @@ function gameLoop(now) {
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) spawnExhaustParticles(rocketGroup.position, rocket.throttle);
         
-        // 更新向量箭頭
         const scale = Math.min(200000, rocket.r.length() * 0.01);
         velArrow.position.copy(rocket.r); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(scale);
         thrustArrow.position.copy(rocket.r); thrustArrow.setDirection(rocket.thrustDir.clone().normalize()); thrustArrow.setLength(scale * 0.6);
