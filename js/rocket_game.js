@@ -6,12 +6,18 @@
 const THREE = window.THREE;
 
 import { 
-    initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
-    getMoonPosition, scene, camera, controls, renderer, rocketGroup, flameMesh,
-    activeRocketParts, machConeMesh, spawnDebrisPiece, updateDebris, setEnvironmentMode, switchRocketMesh,
-    triggerCatastrophicExplosion, updateExplosion,
-    earthMesh, moonMesh, rocketLight, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
-    ROCKET_MODELS, R_EARTH, WORLD_SCALE
+    RocketState, rk4Step, executeGuidance, getOrbitalElements,
+    getMoonPosition, R_EARTH, WORLD_SCALE
+} from './physics_core.js';
+
+import { ROCKET_MODELS } from './rockets_data.js';
+
+import { 
+    initRocketScene, setEnvironmentMode, switchRocketMesh,
+    triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
+    spawnExhaustParticles, updateExhaustParticles,
+    scene, camera, controls, renderer, rocketGroup, flameMesh,
+    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
 } from './rocket_engine.js';
 
 let rocket = null;
