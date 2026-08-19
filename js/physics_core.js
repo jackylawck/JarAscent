@@ -39,6 +39,11 @@ export class RocketState {
         this.isDestroyed = false;
         this.failureReason = null;
         
+        this.ofRatio = 1.0; 
+        this.tvcGain = 1.0; 
+        this.windShear = 0; 
+        this.driftNoise = 0; 
+
         this.escapeTowerSeparated = false;
         this.boostersSeparated = false;
         this.fairingSeparated = false;
@@ -55,7 +60,7 @@ export class RocketState {
         this.relativeAirSpeed = 0;
     }
 
-    initEngine(engineKey, payloadMass, fuelFactor = 1.0, turnAltKm = 8) {
+    initEngine(engineKey, payloadMass, fuelFactor = 1.0, turnAltKm = 8, ofRatio = 1.0, tvcGain = 1.0, windShear = 0, driftNoise = 0) {
         const DB = ROCKET_MODELS[engineKey] || ROCKET_MODELS.CZ10A;
         this.engine = DB;
         this.payloadMass = payloadMass;
@@ -63,6 +68,10 @@ export class RocketState {
         this.fuel2 = DB.fuelMassStage2;
         this.thrustDir.set(0, 1, 0);
         this.gravityTurnAlt = turnAltKm * 1000;
+        this.ofRatio = ofRatio;
+        this.tvcGain = tvcGain;
+        this.windShear = windShear;
+        this.driftNoise = driftNoise;
     }
 
     getCurrentMass() {
@@ -83,6 +92,9 @@ export class RocketState {
             ? this.engine.thrustSea + (this.engine.thrustVac - this.engine.thrustSea) * altRatio
             : this.engine.thrustStage2;
 
+        const ofPenalty = Math.max(0.6, 1.0 - Math.abs(this.ofRatio - 1.0) * 1.5);
+        baseThrust *= ofPenalty;
+
         if (this.guidanceActive && this.stage === 2) {
             const orbit = getOrbitalElements(this);
             const periError = (orbit.periapsis - this.targetPeriapsis) / this.targetPeriapsis;
@@ -102,7 +114,8 @@ export class RocketState {
     getIsp() {
         const alt = this.r.length() - R_EARTH;
         const altRatio = Math.min(1, Math.max(0, alt / 80000));
-        return this.engine.ispSea + (this.engine.ispVac - this.engine.ispSea) * altRatio;
+        const baseIsp = this.engine.ispSea + (this.engine.ispVac - this.engine.ispSea) * altRatio;
+        return baseIsp * (1.0 - Math.abs(this.ofRatio - 1.0) * 0.4);
     }
 }
 
@@ -160,6 +173,11 @@ export function computeDerivatives(state) {
     if (alt < 100000 && state.isLaunched && mass > 0) {
         const omegaVec = new THREE.Vector3(0, ROTATION_SPEED, 0);
         const atmosVel = new THREE.Vector3().crossVectors(omegaVec, r);
+        
+        if (alt > 8000 && alt < 18000) {
+            atmosVel.add(new THREE.Vector3(state.windShear * 2.0, 0, 0));
+        }
+
         const relV = v.clone().sub(atmosVel);
         const speed = relV.length();
         state.relativeAirSpeed = speed;
@@ -195,6 +213,7 @@ export function rk4Step(state, dt) {
     state.flightTime += dt;
 }
 
+// 🚀 修復影格率依賴，穩定火箭轉向
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished || state.isDestroyed) return;
     const alt = state.r.length() - R_EARTH;
@@ -203,15 +222,20 @@ export function executeGuidance(state, dt) {
         state.thrustDir.set(0, 1, 0);
         return;
     }
-    if (alt >= state.gravityTurnAlt && alt < state.gravityTurnAlt + 8000) {
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.015).normalize();
+
+    // 將 pitchRate 與 noise 綁定 dt，確保無論幀率多快都不會過度旋轉翻車！
+    const pitchRate = -0.05 * state.tvcGain * dt;
+    const noise = (Math.random() - 0.5) * state.driftNoise * dt;
+
+    if (alt >= state.gravityTurnAlt && alt < state.gravityTurnAlt + 15000) {
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), pitchRate + noise).normalize();
         return;
     }
-    if (state.v.length() > 300) {
+    if (state.v.length() > 100) {
         const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
         const errorAngle = error.length();
         if (errorAngle > 0.0001) {
-            state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.8 * dt * 2)).normalize();
+            state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.5 * dt * state.tvcGain) + noise).normalize();
         }
     }
 }
