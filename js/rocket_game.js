@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
+ * js/rocket_game.js - JarAscent 3D 任務主控 (燃料持續燃燒 + 視覺白錐修復)
  * @license MIT
  */
 
@@ -17,7 +17,7 @@ import {
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles,
     scene, camera, controls, renderer, rocketGroup, flameMesh,
-    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
+    machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -195,28 +195,28 @@ function evaluateStructuralLimits(rocket) {
     const twr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
     if (rocket.flightTime > 3.0 && alt < 20 && twr < 1.05) {
         rocket.isDestroyed = true;
-        rocket.failureReason = currentLang === 'zh' ? "推重比不足 (TWR < 1.05)，無法離地並在發射台過熱引爆" : "PAD TWR OVERLOAD: Insufficient thrust to lift mass (TWR < 1.05).";
+        rocket.failureReason = currentLang === 'zh' ? "推重比不足 (TWR < 1.05)，無法離地並在發射台過熱引爆" : "PAD TWR OVERLOAD: Insufficient thrust to lift mass.";
         triggerCatastrophicExplosion(visualPos); cameraShake = 4.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (Math.abs(rocket.ofRatio - 1.0) > 0.16) {
         rocket.isDestroyed = true;
-        rocket.failureReason = currentLang === 'zh' ? "氧化劑/燃料混合比嚴重失調，燃燒室壓力劇烈震盪引爆" : "O/F RATIO ANOMALY: Severe mixture imbalance triggered combustion chamber blowout.";
+        rocket.failureReason = currentLang === 'zh' ? "氧化劑/燃料混合比嚴重失調，燃燒室壓力劇烈震盪引爆" : "O/F RATIO ANOMALY: Severe mixture imbalance.";
         triggerCatastrophicExplosion(visualPos); cameraShake = 4.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     const windStress = (rocket.windShear / 15.0);
     if (dynQkPa * windStress > 55.0 && alt < 20000) {
         rocket.isDestroyed = true;
-        rocket.failureReason = currentLang === 'zh' ? `動態氣壓與切變風疊加突破極限 (${(dynQkPa*windStress).toFixed(1)} kPa)，箭體空中氣動剪切斷裂` : `AERODYNAMIC SHEAR FAILURE: Combined Max-Q & Wind Shear exceeded 55 kPa envelope.`;
+        rocket.failureReason = currentLang === 'zh' ? `動態氣壓與切變風疊加突破極限 (${(dynQkPa*windStress).toFixed(1)} kPa)，箭體空中氣動剪切斷裂` : `AERODYNAMIC SHEAR FAILURE: Exceeded 55 kPa envelope.`;
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.5; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (rocket.tvcGain > 1.35 && speed > 200 && alt < 25000) {
         rocket.isDestroyed = true;
-        rocket.failureReason = currentLang === 'zh' ? "TVC 噴嘴靈敏度過高引發高頻震顫，箭體結構共振空中解體" : "CONTROL RESONANCE: Excessive TVC gain induced fatal structural flutter.";
+        rocket.failureReason = currentLang === 'zh' ? "TVC 噴嘴靈敏度過高引發高頻震顫，箭體結構共振空中解體" : "CONTROL RESONANCE: Excessive TVC gain induced fatal flutter.";
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.5; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (rocket.currentGForce > 5.5 && rocket.flightTime > 10) {
         rocket.isDestroyed = true;
-        rocket.failureReason = currentLang === 'zh' ? `加速度過載超過 5.5 G (${rocket.currentGForce.toFixed(2)} G)，內部精密儀器與乘員艙被擠壓破壞` : `G-FORCE OVERLOAD: Structural envelope exceeded 5.5 G rating.`;
+        rocket.failureReason = currentLang === 'zh' ? `加速度過載超過 5.5 G (${rocket.currentGForce.toFixed(2)} G)，結構被擠壓破壞` : `G-FORCE OVERLOAD: Structural envelope exceeded 5.5 G.`;
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
 }
@@ -258,12 +258,17 @@ function updateTelemetryValues() {
     setText('hud-vel', `${speed.toFixed(0)} m/s (M${mach})`);
     
     const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * airSpeed * airSpeed / 1000);
-    document.getElementById('gauge-q-bar').style.width = `${Math.min(100, (dynQkPa / 55) * 100)}%`;
+    const qBar = document.getElementById('gauge-q-bar');
+    if (qBar) qBar.style.width = `${Math.min(100, (dynQkPa / 55) * 100)}%`;
     setText('gauge-q-txt', `${dynQkPa.toFixed(1)} kPa`);
     
+    // 💨 修復馬赫錐：平時完全隱藏 (visible = false)，跨音速時才顯示半透明蒸氣
     if (machConeMesh) {
         const isTransonic = (airSpeed > 320 && airSpeed < 430 && alt < 25000);
-        machConeMesh.material.opacity = isTransonic ? Math.min(0.15, machConeMesh.material.opacity + 0.02) : Math.max(0, machConeMesh.material.opacity - 0.05);
+        machConeMesh.visible = isTransonic;
+        if (isTransonic) {
+            machConeMesh.material.opacity = 0.2;
+        }
     }
 
     const currentTwr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
@@ -324,22 +329,23 @@ function startCountdownSequence() {
     }, 1000);
 }
 
+// 🚀 修正點火初始化：保證燃料充足，推力持續燃燒！
 function executeLiftoff() {
     let engKey = document.getElementById('sel-engine').value;
     
-    // 🟢 簡易模式：強制覆蓋為 100% 安全成功參數，無視面板錯誤設定
-    let payload = isAdvancedMode ? parseInt(document.getElementById('sel-payload').value, 10) : 8000;
-    let fuelFactor = isAdvancedMode ? parseInt(document.getElementById('rng-fuel').value, 10) / 100 : 1.0;
-    let throttle = isAdvancedMode ? parseInt(document.getElementById('rng-throttle').value, 10) : 100;
-    let ofRatio = isAdvancedMode ? parseInt(document.getElementById('rng-ofratio').value, 10) / 100 : 1.0;
-    let turnAltKm = isAdvancedMode ? parseInt(document.getElementById('rng-turn').value, 10) : 8;
-    let tvcGain = isAdvancedMode ? parseInt(document.getElementById('rng-tvc').value, 10) / 100 : 1.0;
-    let windShear = isAdvancedMode ? parseInt(document.getElementById('rng-wind').value, 10) : 0; // 無風
-    let driftNoise = isAdvancedMode ? parseInt(document.getElementById('rng-drift').value, 10) / 100 : 0; // 無漂移
+    // 簡易模式固定 100% 燃料與最優參數
+    let payload = isAdvancedMode ? (parseInt(document.getElementById('sel-payload').value, 10) || 8000) : 8000;
+    let fuelFactor = isAdvancedMode ? ((parseInt(document.getElementById('rng-fuel').value, 10) || 100) / 100) : 1.0;
+    let throttle = isAdvancedMode ? ((parseInt(document.getElementById('rng-throttle').value, 10) || 100) / 100) : 1.0;
+    let ofRatio = isAdvancedMode ? ((parseInt(document.getElementById('rng-ofratio').value, 10) || 100) / 100) : 1.0;
+    let turnAltKm = isAdvancedMode ? (parseInt(document.getElementById('rng-turn').value, 10) || 8) : 8;
+    let tvcGain = isAdvancedMode ? ((parseInt(document.getElementById('rng-tvc').value, 10) || 100) / 100) : 1.0;
+    let windShear = isAdvancedMode ? (parseInt(document.getElementById('rng-wind').value, 10) || 0) : 0;
+    let driftNoise = isAdvancedMode ? ((parseInt(document.getElementById('rng-drift').value, 10) || 0) / 100) : 0;
 
     rocket = new RocketState();
     rocket.initEngine(engKey, payload, fuelFactor, turnAltKm, ofRatio, tvcGain, windShear, driftNoise);
-    rocket.throttle = throttle / 100;
+    rocket.throttle = throttle;
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
     cameraShake = 2.0;
@@ -349,7 +355,7 @@ function executeLiftoff() {
 function bindUI() {
     document.getElementById('btn-launch').onclick = startCountdownSequence;
     document.getElementById('btn-reset').onclick = () => location.reload();
-    document.getElementById('sel-env').onchange = (e) => window.document.getElementById('sel-env').value; 
+    document.getElementById('sel-env').onchange = (e) => setEnvironmentMode(e.target.value);
     document.getElementById('sel-engine').onchange = (e) => switchRocketMesh(e.target.value);
     document.getElementById('btn-lang').onclick = () => { currentLang = currentLang === 'zh' ? 'en' : 'zh'; applyLanguageUI(); };
 
@@ -443,15 +449,21 @@ function gameLoop(now) {
                 targetLookAt.set(0, 0, 0); break;
             case CAM_MODE.ASCEND:
             default:
-                let camDist = (alt < 2000) ? 25 + alt * 0.015 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
+                let camDist = (alt < 2000) ? 25 + alt * 0.015 : 60;
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
                 targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
         }
 
         camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.09);
 
-        if (rocket.getThrustVector().length() > 1000) {
-            if (flameMesh) { flameMesh.visible = true; flameMesh.scale.set(1.0, rocket.throttle || 1.0, 1.0); }
+        // 🔥 尾焰與光源渲染控制
+        const thrustMag = rocket.getThrustVector().length();
+        if (thrustMag > 1000) {
+            if (flameMesh) { 
+                flameMesh.visible = true; 
+                flameMesh.material.color.setHex(0xffaa00);
+                flameMesh.scale.set(1.0, rocket.throttle || 1.0, 1.0); 
+            }
             spawnExhaustParticles(visualPos, rocket.throttle * visualScale, alt < 3000);
             if (rocketLight) { rocketLight.position.copy(visualPos); rocketLight.intensity = 6.0; }
         } else {
@@ -468,9 +480,7 @@ function gameLoop(now) {
     } else {
         if (rocketGroup && !rocket) { rocketGroup.quaternion.set(0, 0, 0, 1); rocketGroup.position.set(0, 1000.4, 0); }
         if (flameMesh) flameMesh.visible = false;
-        if (velArrow) velArrow.visible = false;
-        if (thrustArrow) thrustArrow.visible = false;
-        if (rocketLight) rocketLight.intensity = 0.0;
+        if (machConeMesh) machConeMesh.visible = false;
     }
 
     controls.update(); renderer.render(scene, camera);
