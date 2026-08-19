@@ -183,7 +183,6 @@ function applyLanguageUI() {
     setText('lbl-t-sma', t.tSma);
     setText('lbl-t-moon', t.tMoon);
 
-    // 🚀 更新所有下拉選單（環境、火箭、載荷）
     const selEnv = document.getElementById('sel-env');
     if (selEnv) {
         Array.from(selEnv.options).forEach(opt => {
@@ -635,10 +634,10 @@ function gameLoop(now) {
         if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.8);
 
         switch (currentCamMode) {
+            // ✅ 修正點：LIFTOFF 模式改為跟隨火箭位置，並加上偏移，保持仰望視角
             case CAM_MODE.LIFTOFF:
-                // 🚀 修復低空鏡頭：固定相機在發射場斜上方，讓玩家清楚看見火箭從發射台向上直衝拔起！
-                targetCamPos.set(0, 1014 + shakeY, 32 + shakeX);
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
+                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-18 + shakeX, 8 + shakeY, 18)));
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 5, 0)));
                 break;
             case CAM_MODE.MAX_Q:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(35 + shakeX, 5 + shakeY, 0)));
