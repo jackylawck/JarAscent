@@ -1,9 +1,8 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 航太級動力學與數值核心
+ * js/rocket_engine.js - JarAscent 3D 航太級動力學與高畫質渲染核心
  * @license MIT
  */
 
-// 直接使用全域 window.THREE，移除造成模組衝突的 import 語法
 const THREE = window.THREE;
 
 const MU = 3.986004418e14;
@@ -16,7 +15,7 @@ const J2 = 1.08262668e-3;
 
 export let scene, camera, renderer, controls;
 export let rocketGroup, exhaustParticles = [];
-export let earthMesh, moonMesh;
+export let earthMesh, moonMesh, launchTowerGroup;
 export let velArrow, thrustArrow;
 
 export const ENGINE_DATABASE = Object.freeze({
@@ -34,7 +33,7 @@ export function getMoonPosition(time) {
 
 export class RocketState {
     constructor() {
-        this.r = new THREE.Vector3(R_EARTH, 0, 0);
+        this.r = new THREE.Vector3(R_EARTH + 50, 0, 0); // 初始置於發射台上方
         this.v = new THREE.Vector3(0, 0, ROTATION_SPEED * R_EARTH);
         this.mass = 0;
         this.fuel1 = 0;
@@ -42,7 +41,7 @@ export class RocketState {
         this.stage = 1;
         this.payloadMass = 0;
         this.engine = null;
-        this.thrustDir = new THREE.Vector3(0, 1, 0);
+        this.thrustDir = new THREE.Vector3(1, 0, 0); // 在 (R_EARTH,0,0) 時，徑向向上為 +X
         this.throttle = 1.0;
         this.flightTime = 0;
         this.isLaunched = false;
@@ -59,7 +58,7 @@ export class RocketState {
         this.payloadMass = payloadMass;
         this.fuel1 = DB.fuelMassStage1;
         this.fuel2 = DB.fuelMassStage2;
-        this.thrustDir.set(0, 1, 0);
+        this.thrustDir.set(1, 0, 0);
     }
 
     getCurrentMass() {
@@ -185,112 +184,229 @@ export function rk4Step(state, dt) {
 
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished) return;
-    if (state.v.length() < 0.1) {
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), 0.02).normalize();
+    if (state.flightTime < 3.0) {
+        // 發射前3秒垂直爬升，之後給予東向微擾
         return;
     }
+    if (state.flightTime >= 3.0 && state.flightTime < 3.5) {
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,1,0), -0.015).normalize();
+        return;
+    }
+    // 零攻角重力轉向閉環控制
     const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
     const errorAngle = error.length();
     if (errorAngle > 0.0001) {
-        state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.5 * dt * 3)).normalize();
+        state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.6 * dt * 3)).normalize();
     }
 }
 
+// 產生寫實動態地球紋理
 function createEarthTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 1024; canvas.height = 512;
+    canvas.width = 2048; canvas.height = 1024;
     const ctx = canvas.getContext('2d');
     
-    const gradient = ctx.createRadialGradient(512, 256, 0, 512, 256, 512);
-    gradient.addColorStop(0, '#1a3b5c'); gradient.addColorStop(1, '#0a1a2e');
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 1024, 512);
+    // 深邃大洋
+    const oceanGrad = ctx.createLinearGradient(0, 0, 0, 1024);
+    oceanGrad.addColorStop(0, '#0a2342');
+    oceanGrad.addColorStop(0.5, '#00122e');
+    oceanGrad.addColorStop(1, '#0a2342');
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, 0, 2048, 1024);
     
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)'; ctx.lineWidth = 1;
-    for (let i = 0; i <= 360; i += 30) { ctx.beginPath(); ctx.moveTo((i/360)*1024, 0); ctx.lineTo((i/360)*1024, 512); ctx.stroke(); }
-    for (let i = 0; i <= 180; i += 30) { ctx.beginPath(); ctx.moveTo(0, (i/180)*512); ctx.lineTo(1024, (i/180)*512); ctx.stroke(); }
-    
-    ctx.fillStyle = 'rgba(34, 197, 94, 0.3)';
-    [[300,200],[450,150],[600,280],[200,350],[750,200]].forEach(([cx, cy]) => {
-        ctx.beginPath(); ctx.ellipse(cx, cy, 80 + Math.random()*60, 60 + Math.random()*40, 0, 0, Math.PI*2); ctx.fill();
+    // 大陸板塊與綠洲
+    ctx.fillStyle = '#1e3d2f';
+    const landContours = [
+        [400, 300, 250, 180], [600, 250, 180, 120], [1200, 350, 320, 200],
+        [1500, 600, 220, 160], [500, 650, 200, 280], [1600, 300, 260, 180]
+    ];
+    landContours.forEach(([x, y, rx, ry]) => {
+        ctx.beginPath(); ctx.ellipse(x, y, rx, ry, Math.PI/6, 0, Math.PI*2); ctx.fill();
     });
+    
+    // 科技經緯網格
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 360; i += 15) { ctx.beginPath(); ctx.moveTo((i/360)*2048, 0); ctx.lineTo((i/360)*2048, 1024); ctx.stroke(); }
+    for (let i = 0; i <= 180; i += 15) { ctx.beginPath(); ctx.moveTo(0, (i/180)*1024); ctx.lineTo(2048, (i/180)*1024); ctx.stroke(); }
+    
     return new THREE.CanvasTexture(canvas);
+}
+
+// 建立 3D 星空背景
+function createStarField() {
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 3000;
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount * 3; i += 3) {
+        const rad = R_EARTH * 20 + Math.random() * R_EARTH * 10;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        starPos[i] = rad * Math.sin(phi) * Math.cos(theta);
+        starPos[i+1] = rad * Math.sin(phi) * Math.sin(theta);
+        starPos[i+2] = rad * Math.cos(phi);
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 20000, transparent: true, opacity: 0.8 });
+    return new THREE.Points(starGeo, starMat);
 }
 
 export function initRocketScene(containerEl) {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x030712);
+    scene.background = new THREE.Color(0x010409);
 
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500000000);
-    camera.position.set(R_EARTH + 30000, 20000, 60000);
+    camera.position.set(R_EARTH + 300, 100, 400); // 初始置於發射台近距離特寫
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     containerEl.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.minDistance = 10000;
+    controls.minDistance = 50;
     controls.maxDistance = 400000000;
+    controls.target.set(R_EARTH, 0, 0);
 
-    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    // 宇宙星空
+    scene.add(createStarField());
+
+    // 太陽強光與太空環境光
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
     sun.position.set(100000000, 50000000, 100000000);
     scene.add(sun);
-    scene.add(new THREE.AmbientLight(0x223366, 0.5));
+    scene.add(new THREE.AmbientLight(0x1a2639, 0.8));
 
+    // 地球本體
     earthMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(R_EARTH, 64, 64),
-        new THREE.MeshPhongMaterial({ map: createEarthTexture(), specular: 0x222244, shininess: 10, emissive: 0x0a1a3a, emissiveIntensity: 0.1 })
+        new THREE.SphereGeometry(R_EARTH, 96, 96),
+        new THREE.MeshPhongMaterial({ map: createEarthTexture(), specular: 0x112244, shininess: 15 })
     );
     scene.add(earthMesh);
 
+    // 大氣層發光外殼 (Atmospheric Glow)
+    const atmoMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.BackSide
+    });
+    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.015, 64, 64), atmoMat);
+    scene.add(atmoMesh);
+
+    // 月球本體
     moonMesh = new THREE.Mesh(
         new THREE.SphereGeometry(R_MOON, 32, 32),
-        new THREE.MeshPhongMaterial({ color: 0x888888, emissive: 0x222222, emissiveIntensity: 0.2 })
+        new THREE.MeshPhongMaterial({ color: 0xcccccc, emissive: 0x111111, emissiveIntensity: 0.2 })
     );
     scene.add(moonMesh);
 
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(200, 10, 200), new THREE.MeshStandardMaterial({ color: 0x475569 }));
-    pad.position.set(R_EARTH, 0, 0);
-    scene.add(pad);
+    // 發射台與發射塔架 (Launch Pad & Tower)
+    buildLaunchPadAndTower();
 
+    // 火箭本體 (具備動態發光漆與格柵舵)
     rocketGroup = new THREE.Group();
     build3DRocket(rocketGroup);
+    rocketGroup.position.set(R_EARTH, 0, 0);
     scene.add(rocketGroup);
 
-    velArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1, 0x00ff00);
-    thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1, 0xff5500);
+    // 向量箭頭 (動態調整長度)
+    velArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 100, 0x00ff00);
+    thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 80, 0xff5500);
     scene.add(velArrow); scene.add(thrustArrow);
+}
+
+function buildLaunchPadAndTower() {
+    launchTowerGroup = new THREE.Group();
+    
+    // 主發射台底盤
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(40, 100, 100), padMat);
+    pad.position.set(R_EARTH - 20, 0, 0);
+    launchTowerGroup.add(pad);
+
+    // 鋼結構發射塔架 (Umbilical Tower)
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, metalness: 0.5, roughness: 0.5 });
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(100, 12, 12), towerMat);
+    tower.position.set(R_EARTH + 30, 20, -15);
+    launchTowerGroup.add(tower);
+
+    // 塔架連接臂 (Service Arm)
+    const armMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9 });
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(4, 25, 4), armMat);
+    arm.position.set(R_EARTH + 50, 10, -10);
+    launchTowerGroup.add(arm);
+
+    scene.add(launchTowerGroup);
 }
 
 function build3DRocket(group) {
     const matWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.8, roughness: 0.2 });
-    const matBlue = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.6, roughness: 0.3 });
-    const s1 = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 36, 16), matWhite); s1.position.y = 18; group.add(s1);
-    const s2 = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.5, 14, 16), matBlue); s2.position.y = 43; group.add(s2);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(2.4, 10, 16), matWhite); nose.position.y = 55; group.add(nose);
+    const matCarbon = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.3 });
+    const matEngine = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.1 });
+
+    // 一級助推火箭 (直徑 3.7m, 長度 42m)
+    const s1 = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 42, 32), matWhite);
+    s1.position.y = 21; group.add(s1);
+
+    // 發動機噴嘴
+    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(2.2, 5, 32), matEngine);
+    nozzle.position.y = -1; group.add(nozzle);
+
+    // 二級火箭
+    const s2 = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.5, 16, 32), matCarbon);
+    s2.position.y = 50; group.add(s2);
+
+    // 整流罩鼻錐
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(2.4, 12, 32), matWhite);
+    nose.position.y = 64; group.add(nose);
+
+    // 4 個黑色鈦合金格柵舵
+    for (let i = 0; i < 4; i++) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5, 4), matEngine);
+        const angle = (i / 4) * Math.PI * 2;
+        fin.position.set(Math.cos(angle) * 2.8, 8, Math.sin(angle) * 2.8);
+        fin.rotation.y = -angle;
+        group.add(fin);
+    }
 }
 
 export function spawnExhaustParticles(pos, power) {
-    if (exhaustParticles.length > 100) return;
-    for (let i=0; i<3; i++) {
+    if (exhaustParticles.length > 150) return;
+    for (let i = 0; i < 4; i++) {
         const p = new THREE.Mesh(
-            new THREE.SphereGeometry(0.8 + Math.random()*0.6, 4, 4),
-            new THREE.MeshBasicMaterial({ color: Math.random()>0.4?0xff7700:0xffdd00, transparent: true, opacity: 0.9 })
+            new THREE.SphereGeometry(1.2 + Math.random() * 1.5, 6, 6),
+            new THREE.MeshBasicMaterial({
+                color: Math.random() > 0.3 ? 0xff6600 : 0xffdd00,
+                transparent: true,
+                opacity: 0.95
+            })
         );
-        p.position.set(pos.x+(Math.random()-0.5)*2, pos.y-1.5, pos.z+(Math.random()-0.5)*2);
+        p.position.set(pos.x + (Math.random() - 0.5) * 4, pos.y - 2, pos.z + (Math.random() - 0.5) * 4);
         scene.add(p);
-        exhaustParticles.push({ mesh: p, vx: (Math.random()-0.5)*6, vy: -(20 + Math.random()*30)*power, vz: (Math.random()-0.5)*6, life: 1.0 });
+        exhaustParticles.push({
+            mesh: p,
+            vx: (Math.random() - 0.5) * 10,
+            vy: -(30 + Math.random() * 50) * power,
+            vz: (Math.random() - 0.5) * 10,
+            life: 1.0
+        });
     }
 }
 
 export function updateExhaustParticles(dt) {
-    for (let i=exhaustParticles.length-1; i>=0; i--) {
+    for (let i = exhaustParticles.length - 1; i >= 0; i--) {
         const p = exhaustParticles[i];
         p.mesh.position.add(new THREE.Vector3(p.vx, p.vy, p.vz).multiplyScalar(dt));
-        p.mesh.scale.multiplyScalar(1.03);
-        p.life -= dt * 2.5;
+        p.mesh.scale.multiplyScalar(1.04);
+        p.life -= dt * 2.2;
         p.mesh.material.opacity = Math.max(0, p.life);
-        if (p.life <= 0) { scene.remove(p.mesh); exhaustParticles.splice(i, 1); }
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            exhaustParticles.splice(i, 1);
+        }
     }
 }
