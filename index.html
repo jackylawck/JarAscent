@@ -168,7 +168,6 @@
             <div class="config-panel">
                 <h3 id="ui-config-title">🛠️ 任務與發射場設定</h3>
                 
-                <!-- ☀️/🌙 晝夜環境設定 -->
                 <div class="form-row">
                     <label id="lbl-env">發射場天色時間:</label>
                     <select id="sel-env">
@@ -177,23 +176,32 @@
                     </select>
                 </div>
 
-                <!-- 長征載人火箭 / 重型構型 -->
+                <!-- 🚀 齊全的中外運載火箭清單 -->
                 <div class="form-row">
                     <label id="lbl-engine">運載火箭型號:</label>
                     <select id="sel-engine">
-                        <option value="CZ2F" selected>長征二號F (CZ-2F 載人型)</option>
-                        <option value="MERLIN">獵鷹 9 號 (Falcon 9 Cluster)</option>
-                        <option value="RAPTOR">超重型星艦 (Super Heavy 3x)</option>
-                        <option value="SLS">太空發射系統 (SLS Hydrolox)</option>
+                        <optgroup label="🇨🇳 中國新一代主力火箭">
+                            <option value="CZ10A" selected>長征十號甲 (CZ-10A 登月載人)</option>
+                            <option value="CZ12B">長征十二號乙 (CZ-12B 4米級)</option>
+                            <option value="TL3">天龍三號 (TL-3 大型液體)</option>
+                            <option value="LJ2">力箭二號 (LJ-2 捆綁液體)</option>
+                            <option value="YL1">引力一號 (Gravity-1 全固體)</option>
+                            <option value="SQX3">雙曲線三號 (Hyperbola-3)</option>
+                            <option value="CZ2F">長征二號F (CZ-2F 載人型)</option>
+                        </optgroup>
+                        <optgroup label="🇺🇸 全球重型航天標竿">
+                            <option value="STARSHIP">星艦全系統 (Starship 120m)</option>
+                            <option value="SATURN_V">土星五號 (Saturn V 110m)</option>
+                        </optgroup>
                     </select>
                 </div>
                 
                 <div class="form-row">
                     <label id="lbl-payload">任務載荷艙:</label>
                     <select id="sel-payload">
-                        <option value="8000" selected>神舟載人飛船 (8,000 kg)</option>
-                        <option value="2000">天舟空間站貨運艙 (2,000 kg)</option>
-                        <option value="500">微重力科學試驗艙 (500 kg)</option>
+                        <option value="8000" selected>新一代載人飛船 (8,000 kg)</option>
+                        <option value="2000">空間站貨運艙 (2,000 kg)</option>
+                        <option value="500">科學試驗衛星 (500 kg)</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -232,7 +240,7 @@
                 </h4>
                 
                 <div id="telemetry-summary">
-                    • 當前構型: <b id="t-stage-name">芯一級 + 4助推器 + 逃逸塔</b><br>
+                    • 當前構型: <b id="t-stage-name">發射台地面 (On Pad)</b><br>
                     • 即時推力 Thrust: <b id="t-thrust">0 kN</b><br>
                     • 軌道狀態 Orbit: <b id="t-orbit">發射台地面 (On Pad)</b>
                 </div>
