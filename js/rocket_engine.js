@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 航太動力學與集群發動機核心
+ * js/rocket_engine.js - JarAscent 3D 航太動力學與高擬真排焰煙浪
  * @license MIT
  */
 
@@ -17,11 +17,10 @@ export const WORLD_SCALE = 1000 / R_EARTH;
 
 export let scene, camera, renderer, controls;
 export let rocketGroup, stage1Mesh, stage2Mesh, machConeMesh, exhaustParticles = [];
-export let earthMesh, moonMesh, launchTowerGroup;
+export let earthMesh, moonMesh, launchTowerGroup, rocketLight;
 export let velArrow, thrustArrow;
 export let debrisList = [];
 
-// 🚀 正式升級：一級推力乘以對應發動機集群數量，保證 TWR > 1.4 順利爬升
 export const ENGINE_DATABASE = Object.freeze({
     MERLIN:   Object.freeze({ name: "Merlin 9x",   thrustSea: 845000 * 9,   thrustVac: 981000 * 9,   ispSea: 282, ispVac: 311, dryMassStage1: 22000, fuelMassStage1: 410000, dryMassStage2: 4000, fuelMassStage2: 92000, thrustStage2: 981000 }),
     RAPTOR:   Object.freeze({ name: "Raptor 3x",   thrustSea: 2250000 * 3,  thrustVac: 2500000 * 3,  ispSea: 327, ispVac: 363, dryMassStage1: 35000, fuelMassStage1: 600000, dryMassStage2: 7000, fuelMassStage2: 120000, thrustStage2: 2500000 }),
@@ -37,15 +36,15 @@ export function getMoonPosition(time) {
 
 export class RocketState {
     constructor() {
-        this.r = new THREE.Vector3(R_EARTH, 0, 0);
-        this.v = new THREE.Vector3(0, 0, ROTATION_SPEED * R_EARTH);
+        this.r = new THREE.Vector3(0, R_EARTH, 0);
+        this.v = new THREE.Vector3(ROTATION_SPEED * R_EARTH, 0, 0);
         this.mass = 0;
         this.fuel1 = 0;
         this.fuel2 = 0;
         this.stage = 1;
         this.payloadMass = 0;
         this.engine = null;
-        this.thrustDir = new THREE.Vector3(1, 0, 0);
+        this.thrustDir = new THREE.Vector3(0, 1, 0);
         this.throttle = 1.0;
         this.flightTime = 0;
         this.isLaunched = false;
@@ -57,6 +56,7 @@ export class RocketState {
         
         this.maxVelocity = 0;
         this.maxQ = 0;
+        this.currentGForce = 1.0;
     }
 
     initEngine(engineKey, payloadMass) {
@@ -65,7 +65,7 @@ export class RocketState {
         this.payloadMass = payloadMass;
         this.fuel1 = DB.fuelMassStage1;
         this.fuel2 = DB.fuelMassStage2;
-        this.thrustDir.set(1, 0, 0);
+        this.thrustDir.set(0, 1, 0);
     }
 
     getCurrentMass() {
@@ -155,6 +155,9 @@ export function computeDerivatives(state, dt) {
     const thrustVec = state.getThrustVector();
     const thrustAcc = thrustVec.clone().divideScalar(mass);
 
+    // 計算當前感應加速度過載 (G-Force)
+    state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
+
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
@@ -195,10 +198,9 @@ export function rk4Step(state, dt) {
 
 export function executeGuidance(state, dt) {
     if (!state.isLaunched || state.missionAccomplished) return;
-    if (state.flightTime < 4.0) return; // 垂直起飛段
+    if (state.flightTime < 4.0) return;
     if (state.flightTime >= 4.0 && state.flightTime < 4.5) {
-        // 重力轉向初始俯仰傾斜
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,1,0), -0.02).normalize();
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.02).normalize();
         return;
     }
     const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
@@ -273,7 +275,7 @@ function createEarthTexture() {
 
 function createStarField() {
     const starGeo = new THREE.BufferGeometry();
-    const starCount = 2000;
+    const starCount = 2500;
     const starPos = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
         const rad = 8000 + Math.random() * 4000;
@@ -284,38 +286,43 @@ function createStarField() {
         starPos[i+2] = rad * Math.cos(phi);
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 15, transparent: true, opacity: 0.8 });
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 18, transparent: true, opacity: 0.85 });
     return new THREE.Points(starGeo, starMat);
 }
 
 export function initRocketScene(containerEl) {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x010409);
-    scene.fog = new THREE.FogExp2(0x010409, 0.00015); // 大氣透視柔和霧效
+    scene.background = new THREE.Color(0x020617);
+    scene.fog = new THREE.FogExp2(0x020617, 0.0001);
 
     const width = containerEl.clientWidth || window.innerWidth;
     const height = containerEl.clientHeight || window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(45, width / height, 1, 30000);
-    camera.position.set(1005, 8, 25);
+    camera.position.set(0, 1008, 25);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
     containerEl.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.minDistance = 2;
     controls.maxDistance = 15000;
-    controls.target.set(1000, 0, 0);
+    controls.target.set(0, 1002, 0);
 
     scene.add(createStarField());
 
-    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-    sun.position.set(5000, 3000, 5000);
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+    sun.position.set(3000, 5000, 4000);
     scene.add(sun);
-    scene.add(new THREE.AmbientLight(0x223366, 0.8));
+    scene.add(new THREE.AmbientLight(0x1e293b, 0.9));
+
+    rocketLight = new THREE.PointLight(0xff7700, 0, 150);
+    scene.add(rocketLight);
 
     earthMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1000, 64, 64),
@@ -325,7 +332,7 @@ export function initRocketScene(containerEl) {
 
     const atmoMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1015, 48, 48),
-        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, side: THREE.BackSide })
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.15, side: THREE.BackSide })
     );
     scene.add(atmoMesh);
 
@@ -339,73 +346,123 @@ export function initRocketScene(containerEl) {
 
     rocketGroup = new THREE.Group();
     build3DRocket(rocketGroup);
-    rocketGroup.position.set(1000, 0, 0);
+    rocketGroup.position.set(0, 1000, 0);
     scene.add(rocketGroup);
 
-    velArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 10, 0x00ff00);
-    thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 8, 0xff5500);
+    velArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 10, 0x00ff00);
+    thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 8, 0xff5500);
     scene.add(velArrow); scene.add(thrustArrow);
 }
 
 function buildLaunchPadAndTower() {
     launchTowerGroup = new THREE.Group();
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(4, 10, 10), new THREE.MeshStandardMaterial({ color: 0x334155 }));
-    pad.position.set(999, 0, 0);
+    
+    const padGeo = new THREE.CylinderGeometry(8, 10, 4, 32);
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+    const pad = new THREE.Mesh(padGeo, padMat);
+    pad.position.set(0, 998, 0);
     launchTowerGroup.add(pad);
 
-    const tower = new THREE.Mesh(new THREE.BoxGeometry(10, 1.5, 1.5), new THREE.MeshStandardMaterial({ color: 0xb91c1c }));
-    tower.position.set(1003, 3, -1.5);
-    launchTowerGroup.add(tower);
+    const towerGroup = new THREE.Group();
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.6, roughness: 0.4 });
+    
+    const colGeo = new THREE.CylinderGeometry(0.12, 0.12, 12, 8);
+    [[-1,-1], [1,-1], [-1,1], [1,1]].forEach(([cx, cz]) => {
+        const col = new THREE.Mesh(colGeo, towerMat);
+        col.position.set(cx * 1.2, 6, cz * 1.2);
+        towerGroup.add(col);
+    });
+
+    for (let h = 1; h <= 11; h += 1.5) {
+        const beamGeo = new THREE.BoxGeometry(2.4, 0.08, 0.08);
+        const b1 = new THREE.Mesh(beamGeo, towerMat); b1.position.set(0, h, 1.2); towerGroup.add(b1);
+        const b2 = new THREE.Mesh(beamGeo, towerMat); b2.position.set(0, h, -1.2); towerGroup.add(b2);
+    }
+    
+    const armGeo = new THREE.BoxGeometry(2.5, 0.3, 0.4);
+    const armMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.8 });
+    const arm = new THREE.Mesh(armGeo, armMat);
+    arm.position.set(-1.2, 8.5, 0);
+    towerGroup.add(arm);
+
+    towerGroup.position.set(3.5, 1000, 0);
+    launchTowerGroup.add(towerGroup);
+
+    [-6, 6].forEach(x => {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.2, 14, 8), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+        pole.position.set(x, 1005, -3);
+        launchTowerGroup.add(pole);
+    });
+
     scene.add(launchTowerGroup);
 }
 
 function build3DRocket(group) {
     const matWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.8, roughness: 0.2 });
     const matBlue = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.3 });
-    const matEngine = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.1 });
+    const matEngine = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95, roughness: 0.1 });
 
-    stage1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.2, 16), matWhite);
-    stage1Mesh.position.y = 2.1;
+    stage1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 4.8, 32), matWhite);
+    stage1Mesh.position.y = 2.4;
     group.add(stage1Mesh);
 
-    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 16), matEngine);
-    nozzle.position.y = -0.1; stage1Mesh.add(nozzle);
+    const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.6, 32), matEngine);
+    nozzle.position.y = -0.2; stage1Mesh.add(nozzle);
 
-    stage2Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 1.6, 16), matBlue);
-    stage2Mesh.position.y = 5.0; group.add(stage2Mesh);
+    stage2Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 1.8, 32), matBlue);
+    stage2Mesh.position.y = 5.7; group.add(stage2Mesh);
 
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 16), matWhite);
-    nose.position.y = 6.4; group.add(nose);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.33, 1.5, 32), matWhite);
+    nose.position.y = 7.35; group.add(nose);
 
-    const coneGeo = new THREE.ConeGeometry(1.2, 1.8, 32, 1, true);
+    const coneGeo = new THREE.ConeGeometry(1.5, 2.2, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
-    machConeMesh.position.y = 4.5;
+    machConeMesh.position.y = 5.2;
     group.add(machConeMesh);
 
     for (let i = 0; i < 4; i++) {
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.6, 0.5), matEngine);
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.7, 0.6), matEngine);
         const angle = (i / 4) * Math.PI * 2;
-        fin.position.set(Math.cos(angle) * 0.35, 0.6, Math.sin(angle) * 0.35);
+        fin.position.set(Math.cos(angle) * 0.42, 0.8, Math.sin(angle) * 0.42);
         fin.rotation.y = -angle;
         stage1Mesh.add(fin);
     }
 }
 
-export function spawnExhaustParticles(pos, power) {
-    if (exhaustParticles.length > 80) return;
-    for (let i = 0; i < 3; i++) {
+export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
+    if (exhaustParticles.length > 250) return;
+    
+    const count = isLowAltitude ? 6 : 3;
+    const spread = isLowAltitude ? 4.0 : 1.2;
+    const upwardBias = isLowAltitude ? 0.6 : 2.0;
+    const windDir = new THREE.Vector3(0.4, 0, -0.2).normalize();
+
+    for (let i = 0; i < count; i++) {
+        const isFire = Math.random() < 0.4;
+        const size = isLowAltitude ? (0.35 + Math.random() * 0.5) : (0.18 + Math.random() * 0.25);
         const p = new THREE.Mesh(
-            new THREE.SphereGeometry(0.15 + Math.random() * 0.2, 4, 4),
-            new THREE.MeshBasicMaterial({ color: Math.random() > 0.3 ? 0xff6600 : 0xffdd00, transparent: true, opacity: 0.95 })
+            new THREE.SphereGeometry(size, 6, 6),
+            new THREE.MeshBasicMaterial({
+                color: isFire ? (Math.random() > 0.5 ? 0xff4400 : 0xffaa00) : 0xe2e8f0,
+                transparent: true,
+                opacity: 0.9
+            })
         );
-        p.position.set(pos.x + (Math.random() - 0.5) * 0.4, pos.y - 0.2, pos.z + (Math.random() - 0.5) * 0.4);
+
+        p.position.set(
+            pos.x + (Math.random() - 0.5) * 0.6,
+            pos.y - 0.3,
+            pos.z + (Math.random() - 0.5) * 0.6
+        );
         scene.add(p);
+
         exhaustParticles.push({
             mesh: p,
-            vx: (Math.random() - 0.5) * 1.5,
-            vy: -(4 + Math.random() * 6) * power,
-            vz: (Math.random() - 0.5) * 1.5,
+            vx: (Math.random() - 0.5) * spread + windDir.x * 1.5,
+            vy: -(5 + Math.random() * 7) * power * upwardBias,
+            vz: (Math.random() - 0.5) * spread + windDir.z * 1.5,
+            expansion: isLowAltitude ? 1.07 : 1.03,
             life: 1.0
         });
     }
@@ -415,9 +472,9 @@ export function updateExhaustParticles(dt) {
     for (let i = exhaustParticles.length - 1; i >= 0; i--) {
         const p = exhaustParticles[i];
         p.mesh.position.add(new THREE.Vector3(p.vx, p.vy, p.vz).multiplyScalar(dt));
-        p.mesh.scale.multiplyScalar(1.05);
-        p.life -= dt * 2.5;
-        p.mesh.material.opacity = Math.max(0, p.life);
+        p.mesh.scale.multiplyScalar(p.expansion);
+        p.life -= dt * 1.8;
+        p.mesh.material.opacity = Math.max(0, p.life * 0.8);
         if (p.life <= 0) {
             scene.remove(p.mesh);
             exhaustParticles.splice(i, 1);
