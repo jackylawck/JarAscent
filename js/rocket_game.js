@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與姿態鎖定修復
+ * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
  * @license MIT
  */
 
@@ -9,6 +9,7 @@ import {
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
     getMoonPosition, scene, camera, controls, renderer, rocketGroup, flameMesh,
     activeRocketParts, machConeMesh, spawnDebrisPiece, updateDebris, setEnvironmentMode, switchRocketMesh,
+    triggerCatastrophicExplosion, updateExplosion,
     earthMesh, moonMesh, rocketLight, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
     ROCKET_MODELS, R_EARTH, WORLD_SCALE
 } from './rocket_engine.js';
@@ -43,15 +44,28 @@ let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: f
 
 const I18N = {
     zh: {
-        title: "🚀 躍上天穹 3D", subtitle: "科研級天體動力學與全流程分離沙盒",
-        langBtn: "English", toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
+        title: "🚀 躍上天穹 3D",
+        subtitle: "航太級天體動力學、真實多級分離與結構極限沙盒",
+        langBtn: "English",
+        toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
         toggleDetailShow: "📊 展開深度科研", toggleDetailHide: "📉 收起深度科研",
         configTitle: "🛠️ 任務與發射場設定",
-        lblEnv: "發射場天色時間:", lblEngine: "運載火箭型號:", lblPayload: "任務載荷艙:", lblThrottle: "節流閥推力 (%):",
+        lblEnv: "發射場環境天色:", lblEngine: "運載火箭型號:", lblPayload: "任務載荷艙:",
+        lblFuel: "一級燃料加注量 (%):", lblThrottle: "發動機節流閥 (%):", lblTurn: "重力轉向高度 (km):",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
-        telemetryTitle: "⚙️ 即時飛行與分離狀態", ready: "發射台準備就緒，請點擊發射...",
-        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！火箭全力起飛",
+        telemetryTitle: "⚙️ 飛行遙測與結構載荷狀態",
+        ready: "發射台準備就緒，請點擊發射...",
+        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...",
+        liftoff: "🔥 點火升空！火箭全力起飛",
         orbitSuccess: "🏆【入軌成功】航天器精確進入 300km 預定軌道 (SECO)！",
+        hudTime: "飛行時間 T+", hudAlt: "海拔高度", hudVel: "即時地速",
+        gaugeQ: "動態氣壓 (Max-Q 安全極限: 55 kPa)", gaugeFuel: "推進劑餘量",
+        tConfig: "當前構型", tThrust: "即時推力", tOrbit: "軌道狀態",
+        tGforce: "即時過載 G-Force", tGmax: "最大耐受: 5.5 G", tIsp: "瞬時比衝 Isp",
+        tPeri: "預測近地點 Peri", tApo: "預測遠地點 Apo", tEcc: "軌道偏心率 Ecc (e)",
+        tSma: "軌道半長軸 Semi-a", tMoon: "地月即時距離",
+        onPad: "發射台地面 (On Pad)", ascending: "主動爬升段 (Ascending)", stableOrbit: "🟢 300km 圓軌道 (LEO Orbit)",
+        abortTitle: "💥 任務異常中止 (RUD Failure)", abortRestart: "🔄 重新設定並再次發射",
         milestones: {
             escape: "🚀 T+120s 拋掉逃逸塔 (Tower Jettison)!",
             boosters: "⚡ T+160s 助推器與一級分離!",
@@ -61,15 +75,28 @@ const I18N = {
         }
     },
     en: {
-        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & Multi-Stage Staging Sandbox",
-        langBtn: "中文 (繁體)", toggleUi: "📋 Mission Control", toggleUiHide: "📋 Expand Panel",
-        toggleDetailShow: "📊 Expand Details", toggleDetailHide: "📉 Collapse Details",
-        configTitle: "🛠️ Mission & Pad Setup",
-        lblEnv: "Launch Lighting:", lblEngine: "Launch Vehicle:", lblPayload: "Payload Compartment:", lblThrottle: "Engine Throttle (%):",
+        title: "🚀 JarAscent 3D",
+        subtitle: "Aerospace Dynamics, Custom Staging & Structural Limits",
+        langBtn: "中文 (繁體)",
+        toggleUi: "📋 Mission Control Panel", toggleUiHide: "📋 Expand Panel",
+        toggleDetailShow: "📊 Expand Diagnostics", toggleDetailHide: "📉 Collapse Diagnostics",
+        configTitle: "🛠️ Mission & Engineering Configuration",
+        lblEnv: "Launch Environment:", lblEngine: "Launch Vehicle:", lblPayload: "Payload Mass:",
+        lblFuel: "Stage 1 Fuel Load (%):", lblThrottle: "Engine Throttle (%):", lblTurn: "Gravity Turn Alt (km):",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
-        telemetryTitle: "⚙️ Live Flight & Separation Telemetry", ready: "Pad ready. Awaiting launch sequence...",
-        counting: "⚠️ Terminal countdown sequence in progress...", liftoff: "🔥 Ignition & Liftoff! Ascending into sky.",
+        telemetryTitle: "⚙️ Flight Telemetry & Structural Stress",
+        ready: "Pad ready. T-10 countdown armed...",
+        counting: "⚠️ Terminal countdown sequence armed...",
+        liftoff: "🔥 Main Engine Ignition! Liftoff!",
         orbitSuccess: "🏆【Orbit Inserted】Spacecraft safely in 300km Target Orbit!",
+        hudTime: "TIME T+", hudAlt: "ALTITUDE", hudVel: "VELOCITY",
+        gaugeQ: "Dynamic Pressure (Max-Q Limit: 55 kPa)", gaugeFuel: "Propellant Level",
+        tConfig: "Configuration", tThrust: "Thrust", tOrbit: "Orbit Status",
+        tGforce: "Acceleration G-Force", tGmax: "Max Safe: 5.5 G", tIsp: "Specific Impulse Isp",
+        tPeri: "Predicted Periapsis", tApo: "Predicted Apoapsis", tEcc: "Orbital Eccentricity (e)",
+        tSma: "Semi-major Axis", tMoon: "Lunar Distance",
+        onPad: "Vehicle on Pad (Pre-Ignition)", ascending: "Active Ascent Phase", stableOrbit: "🟢 300km Stable Orbit",
+        abortTitle: "💥 Catastrophic Mission Abort", abortRestart: "🔄 Re-Configure & Launch Again",
         milestones: {
             escape: "🚀 T+120s Launch Escape Tower Jettison!",
             boosters: "⚡ T+160s Boosters & Stage 1 Separation!",
@@ -90,7 +117,7 @@ function showMilestone(text, color) {
     const el = document.createElement('div');
     el.style.cssText = `
         position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
-        font-size: 2.2rem; font-weight: 900; color: ${color};
+        font-size: 2.0rem; font-weight: 900; color: ${color};
         text-shadow: 0 0 25px ${color}, 0 0 50px rgba(0,0,0,0.8);
         pointer-events: none; z-index: 300; letter-spacing: 2px;
         animation: milestonePop 2.5s ease-out forwards;
@@ -103,14 +130,50 @@ function showMilestone(text, color) {
 
 function applyLanguageUI() {
     const t = I18N[currentLang];
-    setText('ui-title', t.title); setText('ui-subtitle', t.subtitle);
+    setText('ui-title', t.title);
+    setText('ui-subtitle', t.subtitle);
     setText('btn-lang', t.langBtn);
     setText('btn-toggle-ui', isUIVisible ? t.toggleUi : t.toggleUiHide);
     setText('btn-toggle-details', isDetailTelemetryVisible ? t.toggleDetailHide : t.toggleDetailShow);
-    setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv);
-    setText('lbl-engine', t.lblEngine); setText('lbl-payload', t.lblPayload);
-    setText('lbl-throttle', t.lblThrottle); setText('btn-launch', t.launchBtn);
-    setText('btn-reset', t.resetBtn); setText('ui-telemetry-title', t.telemetryTitle);
+    setText('ui-config-title', t.configTitle);
+    setText('lbl-env', t.lblEnv);
+    setText('lbl-engine', t.lblEngine);
+    setText('lbl-payload', t.lblPayload);
+    setText('lbl-fuel', t.lblFuel);
+    setText('lbl-throttle', t.lblThrottle);
+    setText('lbl-turn', t.lblTurn);
+    setText('btn-launch', t.launchBtn);
+    setText('btn-reset', t.resetBtn);
+    setText('ui-telemetry-title', t.telemetryTitle);
+    
+    setText('hud-lbl-time', t.hudTime);
+    setText('hud-lbl-alt', t.hudAlt);
+    setText('hud-lbl-vel', t.hudVel);
+    setText('lbl-gauge-q', t.gaugeQ);
+    setText('lbl-gauge-fuel', t.gaugeFuel);
+    setText('lbl-t-config', t.tConfig);
+    setText('lbl-t-thrust', t.tThrust);
+    setText('lbl-t-orbit', t.tOrbit);
+    setText('lbl-t-gforce', t.tGforce);
+    setText('lbl-t-gmax', t.tGmax);
+    setText('lbl-t-isp', t.tIsp);
+    setText('lbl-t-peri', t.tPeri);
+    setText('lbl-t-apo', t.tApo);
+    setText('lbl-t-ecc', t.tEcc);
+    setText('lbl-t-sma', t.tSma);
+    setText('lbl-t-moon', t.tMoon);
+
+    const selEngine = document.getElementById('sel-engine');
+    if (selEngine) {
+        Array.from(selEngine.options).forEach(opt => {
+            const m = ROCKET_MODELS[opt.value];
+            if (m) opt.text = currentLang === 'zh' ? m.name : m.nameEn;
+        });
+    }
+    const grpCn = document.getElementById('grp-cn');
+    if (grpCn) grpCn.label = currentLang === 'zh' ? "🇨🇳 中國新一代主力火箭" : "🇨🇳 Heavy & Commercial Fleet";
+    const grpUs = document.getElementById('grp-us');
+    if (grpUs) grpUs.label = currentLang === 'zh' ? "🇺🇸 全球重型航天標竿" : "🇺🇸 Super Heavy Standards";
 }
 
 function initOrbitLine() {
@@ -148,7 +211,49 @@ function updatePredictedOrbit(state) {
     orbitLine.visible = true;
 }
 
+function evaluateStructuralLimits(rocket) {
+    if (rocket.isDestroyed) return;
+
+    const alt = rocket.r.length() - R_EARTH;
+    const speed = rocket.relativeAirSpeed || rocket.v.length();
+    const rho = 1.225 * Math.exp(-alt / 8500);
+    const dynQkPa = (0.5 * rho * speed * speed) / 1000;
+    const visualPos = rocket.r.clone().multiplyScalar(WORLD_SCALE);
+
+    // 💥 1. 發射台推重比過低 (TWR < 1.05) 導致無法離地自爆
+    const twr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
+    if (rocket.flightTime > 3.0 && alt < 20 && twr < 1.05) {
+        rocket.isDestroyed = true;
+        rocket.failureReason = currentLang === 'zh' ? "發射台推重比不足 (TWR < 1.05)，引擎過熱引爆" : "PAD TWR OVERLOAD: Insufficient thrust to clear pad. Overheated.";
+        triggerCatastrophicExplosion(visualPos);
+        cameraShake = 4.0;
+        showMissionDebrief(getOrbitalElements(rocket));
+        return;
+    }
+
+    // 💥 2. 突破真實大氣相對動壓 Max-Q 極限 (> 55 kPa) 氣動剪切解體
+    if (dynQkPa > 55.0 && alt < 20000) {
+        rocket.isDestroyed = true;
+        rocket.failureReason = currentLang === 'zh' ? `相對動壓突破 55 kPa 極限 (${dynQkPa.toFixed(1)} kPa)，箭體氣動解體` : `MAX-Q SHEAR FAILURE: Exceeded 55 kPa relative pressure (${dynQkPa.toFixed(1)} kPa). Hull shredded.`;
+        triggerCatastrophicExplosion(visualPos);
+        cameraShake = 3.5;
+        showMissionDebrief(getOrbitalElements(rocket));
+        return;
+    }
+
+    // 💥 3. 過載過大 (> 5.5 G) 結構擠壓解體
+    if (rocket.currentGForce > 5.5 && rocket.flightTime > 10) {
+        rocket.isDestroyed = true;
+        rocket.failureReason = currentLang === 'zh' ? `加速度過載超過 5.5 G 極限 (${rocket.currentGForce.toFixed(2)} G)，結構被擠壓破壞` : `G-FORCE OVERLOAD: Exceeded 5.5 G (${rocket.currentGForce.toFixed(2)} G). Hull crushed.`;
+        triggerCatastrophicExplosion(visualPos);
+        cameraShake = 3.0;
+        showMissionDebrief(getOrbitalElements(rocket));
+        return;
+    }
+}
+
 function handleMultiStageSeparation(rocket) {
+    if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
 
@@ -188,6 +293,7 @@ function handleMultiStageSeparation(rocket) {
 }
 
 function updateTelemetryValues() {
+    const t = I18N[currentLang];
     if (!rocket) {
         if (isDetailTelemetryVisible) {
             setText('t-gforce', '1.00 G');
@@ -204,10 +310,11 @@ function updateTelemetryValues() {
     const alt = Math.max(0, rocket.r.length() - R_EARTH);
     const altKm = (alt / 1000).toFixed(1);
     const speed = rocket.v.length();
-    const mach = (speed / 340).toFixed(1);
+    const airSpeed = rocket.relativeAirSpeed || speed;
+    const mach = (airSpeed / 340).toFixed(1);
     const orbit = getOrbitalElements(rocket);
     const fuelPct = (rocket.stage === 1) 
-        ? Math.max(0, Math.round((rocket.fuel1 / rocket.engine.fuelMassStage1) * 100))
+        ? Math.max(0, Math.round((rocket.fuel1 / (rocket.engine.fuelMassStage1 * (rocket.fuelFactor || 1.0))) * 100))
         : Math.max(0, Math.round((rocket.fuel2 / rocket.engine.fuelMassStage2) * 100));
 
     setText('hud-time', `${rocket.flightTime.toFixed(1)}s`);
@@ -219,29 +326,32 @@ function updateTelemetryValues() {
     else if (alt < 100000) altEl.style.color = '#fbbf24';
     else altEl.style.color = '#38bdf8';
 
-    const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * speed * speed / 1000);
-    const maxQRatio = Math.min(100, (dynQkPa / 60) * 100);
+    const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * airSpeed * airSpeed / 1000);
+    const maxQRatio = Math.min(100, (dynQkPa / 55) * 100);
     setText('gauge-q-txt', `${dynQkPa.toFixed(1)} kPa`);
     document.getElementById('gauge-q-bar').style.width = `${maxQRatio}%`;
     setText('gauge-fuel-txt', `${fuelPct}%`);
     document.getElementById('gauge-fuel-bar').style.width = `${fuelPct}%`;
 
     if (machConeMesh) {
-        const isTransonic = (speed > 320 && speed < 430 && alt < 25000);
+        const isTransonic = (airSpeed > 320 && airSpeed < 430 && alt < 25000);
         machConeMesh.material.opacity = isTransonic ? Math.min(0.8, machConeMesh.material.opacity + 0.1) : Math.max(0, machConeMesh.material.opacity - 0.05);
     }
 
-    let stageName = `${rocket.engine.name} 全推力爬升`;
-    if (rocket.stage2Separated) stageName = "🛰️ 航天器 300km 軌道巡航 (Orbiting)";
-    else if (rocket.boostersSeparated) stageName = "二級主動力推進 (Stage 2 Burn)";
-    else if (rocket.escapeTowerSeparated) stageName = "芯一級 + 助推器全推力";
+    const currentTwr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
+    setText('t-twr', currentTwr.toFixed(2));
+    setText('t-thrust', `${(rocket.getThrustVector().length()/1000).toFixed(0)} kN`);
+
+    let stageName = `${currentLang==='zh'?rocket.engine.name:rocket.engine.nameEn} ${t.ascending}`;
+    if (rocket.isDestroyed) stageName = "💥 CATASTROPHIC FAILURE (RUD)";
+    else if (rocket.stage2Separated) stageName = "🛰️ 300km Orbit Cruise";
+    else if (rocket.boostersSeparated) stageName = "Stage 2 Burn";
     setText('t-stage-name', stageName);
 
-    setText('t-thrust', `${(rocket.getThrustVector().length()/1000).toFixed(0)} kN`);
-    setText('t-orbit', orbit.isOrbital ? "🟢 300km 圓軌道 (LEO Orbit)" : "🟡 主動爬升段 (Ascending)");
+    setText('t-orbit', orbit.isOrbital ? t.stableOrbit : t.ascending);
 
     if (isDetailTelemetryVisible) {
-        setText('t-gforce', rocket.flightTime > 0 ? `${rocket.currentGForce.toFixed(2)} G` : '1.00 G');
+        setText('t-gforce', `${rocket.currentGForce.toFixed(2)} G`);
         setText('t-isp', rocket.flightTime > 0 ? `${Math.round(rocket.getIsp())} s` : '—');
         setText('t-peri', (orbit.periapsis > 0) ? `${(orbit.periapsis/1000).toFixed(1)} km` : '0.0 km');
         setText('t-apo', (orbit.apoapsis > 0) ? `${(orbit.apoapsis/1000).toFixed(1)} km` : '0.0 km');
@@ -272,18 +382,31 @@ function showMissionDebrief(orbit) {
 
     const rankEl = document.getElementById('debrief-rank');
     const titleEl = document.getElementById('debrief-title');
+    const statusEl = document.getElementById('stat-status');
     
-    if (orbit.isOrbital) {
-        if (periErr < 3.0) {
+    if (rocket.isDestroyed) {
+        rankEl.innerText = "FAIL"; rankEl.style.color = "#ef4444";
+        titleEl.innerText = I18N[currentLang].abortTitle;
+        statusEl.innerText = rocket.failureReason || "Structural Failure";
+        statusEl.style.color = "#ef4444";
+    } else if (orbit.isOrbital) {
+        if (periErr < 3.0 && fuelLeft >= 8) {
             rankEl.innerText = "S+"; rankEl.style.color = "#f43f5e";
-            titleEl.innerText = "🌟 傳奇星際導航官 (Grandmaster Ace)";
+            titleEl.innerText = "🌟 Grandmaster Orbital Ace";
+            statusEl.innerText = currentLang === 'zh' ? "完美入軌" : "Perfect Insertion";
         } else if (periErr < 10.0) {
             rankEl.innerText = "S"; rankEl.style.color = "#fbbf24";
-            titleEl.innerText = "🏆 完美入軌指揮官 (Orbital Ace)";
+            titleEl.innerText = "🏆 Precision Orbital Insertion";
+            statusEl.innerText = currentLang === 'zh' ? "精確入軌" : "Nominal Insertion";
         } else {
             rankEl.innerText = "A"; rankEl.style.color = "#38bdf8";
-            titleEl.innerText = "🛰️ 標準入軌成功 (LEO Insertion)";
+            titleEl.innerText = "🛰️ Stable LEO Insertion";
+            statusEl.innerText = currentLang === 'zh' ? "標準入軌" : "Inserted";
         }
+    } else {
+        rankEl.innerText = "B"; rankEl.style.color = "#94a3b8";
+        titleEl.innerText = "🚀 Suborbital Test Completed";
+        statusEl.innerText = currentLang === 'zh' ? "入軌前燃料耗盡" : "Fuel Depleted before Orbit";
     }
 }
 
@@ -319,11 +442,13 @@ function executeLiftoff() {
     let payload = parseInt(document.getElementById('sel-payload').value, 10);
     if (isNaN(payload)) payload = 8000;
 
+    let fuelFactor = parseInt(document.getElementById('rng-fuel').value, 10) / 100;
+    let turnAltKm = parseInt(document.getElementById('rng-turn').value, 10);
     let throttle = parseInt(document.getElementById('rng-throttle').value, 10);
-    if (isNaN(throttle)) throttle = 100;
 
     rocket = new RocketState();
-    rocket.initEngine(engKey, payload);
+    rocket.fuelFactor = fuelFactor;
+    rocket.initEngine(engKey, payload, fuelFactor, turnAltKm);
     rocket.throttle = throttle / 100;
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
@@ -354,10 +479,15 @@ function bindUI() {
 
     document.getElementById('rng-throttle').oninput = (e) => { 
         let val = parseInt(e.target.value, 10);
-        if (!isNaN(val) && rocket && !rocket.missionAccomplished) rocket.throttle = Math.max(0.1, Math.min(1.0, val / 100));
+        if (!isNaN(val) && rocket && !rocket.missionAccomplished && !rocket.isDestroyed) {
+            rocket.throttle = Math.max(0.1, Math.min(1.0, val / 100));
+        }
     };
 
-    document.getElementById('btn-lang').onclick = () => { currentLang = currentLang==='zh'?'en':'zh'; applyLanguageUI(); };
+    document.getElementById('btn-lang').onclick = () => { 
+        currentLang = currentLang === 'zh' ? 'en' : 'zh'; 
+        applyLanguageUI(); 
+    };
 
     const toggleBtn = document.getElementById('btn-toggle-ui');
     toggleBtn.onclick = () => {
@@ -376,7 +506,7 @@ function bindUI() {
         updateTelemetryValues();
     };
 
-    const updateTimeDisplay = () => setText('time-scale-display', `倍速: ${timeScale.toFixed(1)}x`);
+    const updateTimeDisplay = () => setText('time-scale-display', `倍速/Warp: ${timeScale.toFixed(1)}x`);
     document.getElementById('btn-time-slower').onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); };
     document.getElementById('btn-time-faster').onclick = () => { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); };
     window.addEventListener('keydown', (e) => {
@@ -399,7 +529,9 @@ function gameLoop(now) {
     if (moonMesh) moonMesh.position.copy(getMoonPosition(performance.now() / 1000).multiplyScalar(WORLD_SCALE));
     if (earthMesh) earthMesh.rotation.y += dt * 0.02 * currentEffectiveTimeScale;
 
-    if (rocket && rocket.isLaunched) {
+    updateExplosion(dt * currentEffectiveTimeScale);
+
+    if (rocket && rocket.isLaunched && !rocket.isDestroyed) {
         executeGuidance(rocket, dt);
 
         const maxSubDt = (rocket.r.length() - R_EARTH < 100000 && rocket.getThrustVector().length() > 0) ? 0.005 : 0.05;
@@ -410,6 +542,7 @@ function gameLoop(now) {
             remainingDt -= stepDt;
         }
 
+        evaluateStructuralLimits(rocket);
         handleMultiStageSeparation(rocket);
         updateDebris(dt * currentEffectiveTimeScale);
 
@@ -489,10 +622,10 @@ function gameLoop(now) {
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
     } else {
-        // 🔒 未點火前：嚴格強制鎖定垂直站立姿態，消滅歪倒
-        rocketGroup.quaternion.set(0, 0, 0, 1);
-        rocketGroup.position.set(0, 1000.8, 0);
-
+        if (rocketGroup && !rocket) {
+            rocketGroup.quaternion.set(0, 0, 0, 1);
+            rocketGroup.position.set(0, 1000.8, 0);
+        }
         if (flameMesh) flameMesh.visible = false;
         if (velArrow) velArrow.visible = false;
         if (thrustArrow) thrustArrow.visible = false;
