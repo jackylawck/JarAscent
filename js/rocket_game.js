@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (解耦架構)
+ * js/rocket_game.js - JarAscent 3D 任務主控與姿態鎖定修復
  * @license MIT
  */
 
@@ -348,7 +348,6 @@ function bindUI() {
         setEnvironmentMode(e.target.value);
     };
 
-    // 🚀 切換下拉選單時即時更換 3D 模型
     document.getElementById('sel-engine').onchange = (e) => {
         switchRocketMesh(e.target.value);
     };
@@ -490,6 +489,10 @@ function gameLoop(now) {
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
     } else {
+        // 🔒 未點火前：嚴格強制鎖定垂直站立姿態，消滅歪倒
+        rocketGroup.quaternion.set(0, 0, 0, 1);
+        rocketGroup.position.set(0, 1000.8, 0);
+
         if (flameMesh) flameMesh.visible = false;
         if (velArrow) velArrow.visible = false;
         if (thrustArrow) thrustArrow.visible = false;
