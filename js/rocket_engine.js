@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D 物理引擎 + 多型號 3D 火箭工廠
+ * js/rocket_engine.js - JarAscent 3D v6.1 (WGS-84 大氣共轉熱修復版)
  * @license MIT
  */
 
@@ -10,7 +10,7 @@ export const MU_MOON = 4.9048695e12;
 export const R_EARTH = 6378137;
 export const R_MOON = 1737400;
 export const MOON_ORBIT_RADIUS = 384400000;
-export const ROTATION_SPEED = 7.292115e-5;
+export const ROTATION_SPEED = 7.292115e-5; // 地球自轉角速度 (rad/s)
 export const J2 = 1.08262668e-3;
 
 export const WORLD_SCALE = 1000 / R_EARTH; 
@@ -21,67 +21,67 @@ export let activeRocketParts = null;
 export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLight;
 export let velArrow, thrustArrow;
 export let debrisList = [];
+export let explosionParticles = [];
 
-// 🚀 全球重型與新一代商業運載火箭數據庫
 export const ROCKET_MODELS = Object.freeze({
     CZ10A: {
-        name: "長征十號甲 (CZ-10A 登月載人)",
+        name: "長征十號甲 (CZ-10A 登月載人)", nameEn: "Long March 10A (CZ-10A Lunar)",
         heightM: 67, stages: 2, hasTower: true, hasBoosters: false,
         thrustSea: 7500000, thrustVac: 8200000, ispSea: 288, ispVac: 315,
         dryMassStage1: 35000, fuelMassStage1: 420000, dryMassStage2: 6000, fuelMassStage2: 95000, thrustStage2: 1200000,
         colorTheme: { body: 0xf8fafc, accent: 0xdc2626, ring: 0x0f172a, payload: 0xfbbf24 }
     },
     CZ12B: {
-        name: "長征十二號乙 (CZ-12B 4米級)",
+        name: "長征十二號乙 (CZ-12B 4米級)", nameEn: "Long March 12B (CZ-12B 4m)",
         heightM: 62, stages: 2, hasTower: false, hasBoosters: false,
         thrustSea: 4800000, thrustVac: 5200000, ispSea: 295, ispVac: 320,
         dryMassStage1: 24000, fuelMassStage1: 380000, dryMassStage2: 4500, fuelMassStage2: 80000, thrustStage2: 850000,
         colorTheme: { body: 0xf8fafc, accent: 0x0284c7, ring: 0xdc2626, payload: 0xf8fafc }
     },
     TL3: {
-        name: "天龍三號 (TL-3 大型液體)",
+        name: "天龍三號 (TL-3 大型液體)", nameEn: "Tianlong-3 (TL-3 Large Liquid)",
         heightM: 71, stages: 2, hasTower: false, hasBoosters: false,
         thrustSea: 7700000, thrustVac: 8400000, ispSea: 285, ispVac: 312,
         dryMassStage1: 36000, fuelMassStage1: 530000, dryMassStage2: 5000, fuelMassStage2: 90000, thrustStage2: 1100000,
         colorTheme: { body: 0xf8fafc, accent: 0x0f172a, ring: 0xdc2626, payload: 0xf8fafc }
     },
     LJ2: {
-        name: "力箭二號 (LJ-2 捆綁液體)",
+        name: "力箭二號 (LJ-2 捆綁液體)", nameEn: "Lijian-2 (LJ-2 Boosted)",
         heightM: 53, stages: 2, hasTower: false, hasBoosters: true, boosterCount: 2,
         thrustSea: 6600000, thrustVac: 7100000, ispSea: 280, ispVac: 308,
         dryMassStage1: 32000, fuelMassStage1: 420000, dryMassStage2: 4500, fuelMassStage2: 70000, thrustStage2: 800000,
         colorTheme: { body: 0xf8fafc, accent: 0x0284c7, ring: 0x0f172a, payload: 0xf8fafc }
     },
     YL1: {
-        name: "引力一號 (Gravity-1 全固體捆綁)",
+        name: "引力一號 (Gravity-1 全固體)", nameEn: "Gravity-1 (YL-1 All-Solid)",
         heightM: 42, stages: 3, hasTower: false, hasBoosters: true, boosterCount: 4,
         thrustSea: 6000000, thrustVac: 6400000, ispSea: 245, ispVac: 275,
         dryMassStage1: 45000, fuelMassStage1: 360000, dryMassStage2: 8000, fuelMassStage2: 40000, thrustStage2: 1200000,
         colorTheme: { body: 0xf8fafc, accent: 0x1e3a8a, ring: 0xf59e0b, payload: 0xf8fafc }
     },
     SQX3: {
-        name: "雙曲線三號 (Hyperbola-3 可重複)",
+        name: "雙曲線三號 (Hyperbola-3)", nameEn: "Hyperbola-3 (SQX-3 Reusable)",
         heightM: 69, stages: 2, hasTower: false, hasBoosters: false,
         thrustSea: 7600000, thrustVac: 8300000, ispSea: 325, ispVac: 360,
         dryMassStage1: 34000, fuelMassStage1: 490000, dryMassStage2: 5000, fuelMassStage2: 85000, thrustStage2: 1000000,
         colorTheme: { body: 0x0f172a, accent: 0xdc2626, ring: 0xf8fafc, payload: 0xf8fafc }
     },
     STARSHIP: {
-        name: "星艦全系統 (Starship 120m)",
+        name: "星艦全系統 (Starship 120m)", nameEn: "Starship Full Stack (120m)",
         heightM: 120, stages: 2, hasTower: false, hasBoosters: false,
         thrustSea: 75000000, thrustVac: 82000000, ispSea: 327, ispVac: 363,
         dryMassStage1: 200000, fuelMassStage1: 3400000, dryMassStage2: 100000, fuelMassStage2: 1200000, thrustStage2: 14700000,
         colorTheme: { body: 0xe2e8f0, accent: 0x0f172a, ring: 0x0f172a, payload: 0x0f172a }
     },
     SATURN_V: {
-        name: "土星五號 (Saturn V 110m)",
+        name: "土星五號 (Saturn V 110m)", nameEn: "Saturn V (Apollo 110m)",
         heightM: 110, stages: 3, hasTower: true, hasBoosters: false,
         thrustSea: 34500000, thrustVac: 38700000, ispSea: 263, ispVac: 304,
         dryMassStage1: 130000, fuelMassStage1: 2160000, dryMassStage2: 40000, fuelMassStage2: 480000, thrustStage2: 5115000,
         colorTheme: { body: 0xf8fafc, accent: 0x0f172a, ring: 0x0f172a, payload: 0xf8fafc }
     },
     CZ2F: {
-        name: "長征二號F (CZ-2F 載人型)",
+        name: "長征二號F (CZ-2F 載人型)", nameEn: "Long March 2F (CZ-2F Shenzhou)",
         heightM: 58, stages: 2, hasTower: true, hasBoosters: true, boosterCount: 4,
         thrustSea: 5920000, thrustVac: 6500000, ispSea: 289, ispVac: 315,
         dryMassStage1: 30000, fuelMassStage1: 450000, dryMassStage2: 5500, fuelMassStage2: 90000, thrustStage2: 742000,
@@ -97,18 +97,21 @@ export function getMoonPosition(time) {
 
 export class RocketState {
     constructor() {
-        this.r = new THREE.Vector3(0, R_EARTH, 0);
-        this.v = new THREE.Vector3(0, 0, 0);
+        this.r = new THREE.Vector3(0, R_EARTH, 0); // 垂直發射台頂點
+        this.v = new THREE.Vector3(0, 0, 0);       // 初始慣性速度 (剛體鎖定發射台)
         this.mass = 0;
         this.fuel1 = 0;
         this.fuel2 = 0;
         this.stage = 1;
         this.payloadMass = 0;
         this.engine = null;
-        this.thrustDir = new THREE.Vector3(0, 1, 0); // 嚴格垂直向上
+        this.thrustDir = new THREE.Vector3(0, 1, 0);
         this.throttle = 1.0;
+        this.gravityTurnAlt = 8000;
         this.flightTime = 0;
         this.isLaunched = false;
+        this.isDestroyed = false;
+        this.failureReason = null;
         
         this.escapeTowerSeparated = false;
         this.boostersSeparated = false;
@@ -123,15 +126,17 @@ export class RocketState {
         this.maxVelocity = 0;
         this.maxQ = 0;
         this.currentGForce = 1.0;
+        this.relativeAirSpeed = 0; // WGS-84 大氣相對風速 (m/s)
     }
 
-    initEngine(engineKey, payloadMass) {
+    initEngine(engineKey, payloadMass, fuelFactor = 1.0, turnAltKm = 8) {
         const DB = ROCKET_MODELS[engineKey] || ROCKET_MODELS.CZ10A;
         this.engine = DB;
         this.payloadMass = payloadMass;
-        this.fuel1 = DB.fuelMassStage1;
+        this.fuel1 = DB.fuelMassStage1 * fuelFactor;
         this.fuel2 = DB.fuelMassStage2;
         this.thrustDir.set(0, 1, 0);
+        this.gravityTurnAlt = turnAltKm * 1000;
     }
 
     getCurrentMass() {
@@ -141,6 +146,7 @@ export class RocketState {
     }
 
     getThrustVector() {
+        if (this.isDestroyed) return new THREE.Vector3(0,0,0);
         if (this.stage === 1 && this.fuel1 <= 0) return new THREE.Vector3(0,0,0);
         if (this.stage === 2 && this.fuel2 <= 0) return new THREE.Vector3(0,0,0);
         if (this.missionAccomplished) return new THREE.Vector3(0,0,0);
@@ -201,8 +207,10 @@ export function computeDerivatives(state, dt) {
     const rMag = r.length();
     const mass = state.getCurrentMass();
 
+    // 1. 中心天體萬有引力
     const gravity = r.clone().multiplyScalar(-MU / Math.pow(rMag, 3));
 
+    // 2. J2 地球扁率攝動加速度 (Y 軸為自轉極軸)
     const x = r.x, y = r.y, z = r.z;
     const rMag2 = rMag * rMag;
     const coeff = 1.5 * J2 * MU * Math.pow(R_EARTH, 2) / (rMag2 * rMag2 * rMag);
@@ -213,26 +221,37 @@ export function computeDerivatives(state, dt) {
         coeff * z * (5 * yRatio - 1)
     );
 
+    // 3. 第三體月球引力攝動
     const moonPos = getMoonPosition(state.flightTime);
     const rToMoon = moonPos.clone().sub(r);
     const moonAcc = rToMoon.clone().multiplyScalar(MU_MOON / Math.pow(rToMoon.length(), 3))
                     .sub(moonPos.clone().multiplyScalar(MU_MOON / Math.pow(moonPos.length(), 3)));
 
+    // 4. 發動機主動推力
     const thrustVec = state.getThrustVector();
     const thrustAcc = thrustVec.clone().divideScalar(mass);
 
     state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
 
+    // 5. 🛡️ [熱修復核心] WGS-84 大氣共轉相對風場與真實動壓計算
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
-        const speed = v.length();
+        // 地球大氣隨自轉角速度向量 (繞 Y 軸旋轉)
+        const omegaVec = new THREE.Vector3(0, ROTATION_SPEED, 0);
+        const atmosVel = new THREE.Vector3().crossVectors(omegaVec, r);
+        
+        // 相對大氣速度 = 慣性速度 - 大氣共轉線速度
+        const relV = v.clone().sub(atmosVel);
+        const speed = relV.length();
+        state.relativeAirSpeed = speed;
+
         if (speed > 0.1) {
-            const rho = 1.225 * Math.exp(-alt / 8500);
-            const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28;
-            const dynQ = 0.5 * rho * speed * speed;
+            const rho = 1.225 * Math.exp(-alt / 8500); // 美國標準大氣指數衰減模型
+            const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28; // 跨音速阻力係數膨脹
+            const dynQ = 0.5 * rho * speed * speed; // 嚴格科學動態氣壓 (Pa)
             if (dynQ > state.maxQ) state.maxQ = dynQ;
-            dragAcc = v.clone().normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
+            dragAcc = relV.normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
         }
     }
 
@@ -259,20 +278,68 @@ export function rk4Step(state, dt) {
 }
 
 export function executeGuidance(state, dt) {
-    if (!state.isLaunched || state.missionAccomplished) return;
-    if (state.flightTime < 8.0) {
+    if (!state.isLaunched || state.missionAccomplished || state.isDestroyed) return;
+    const alt = state.r.length() - R_EARTH;
+    
+    if (alt < state.gravityTurnAlt) {
         state.thrustDir.set(0, 1, 0);
         return;
     }
-    if (state.flightTime >= 8.0 && state.flightTime < 12.0) {
-        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.008).normalize();
+    if (alt >= state.gravityTurnAlt && alt < state.gravityTurnAlt + 8000) {
+        state.thrustDir.applyAxisAngle(new THREE.Vector3(0,0,1), -0.015).normalize();
         return;
     }
-    if (state.v.length() > 50) {
+    if (state.v.length() > 300) {
         const error = new THREE.Vector3().crossVectors(state.thrustDir, state.v.clone().normalize());
         const errorAngle = error.length();
         if (errorAngle > 0.0001) {
-            state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.6 * dt * 2)).normalize();
+            state.thrustDir.applyAxisAngle(error.normalize(), -Math.min(errorAngle, 0.8 * dt * 2)).normalize();
+        }
+    }
+}
+
+export function triggerCatastrophicExplosion(pos) {
+    if (!rocketGroup) return;
+    rocketGroup.visible = false;
+    if (flameMesh) flameMesh.visible = false;
+
+    for (let i = 0; i < 160; i++) {
+        const size = 0.6 + Math.random() * 1.6;
+        const p = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: Math.random() > 0.3 ? 0xff2200 : 0xffdd00,
+                transparent: true,
+                opacity: 1.0
+            })
+        );
+        p.position.copy(pos);
+        scene.add(p);
+
+        const speed = 12 + Math.random() * 35;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+
+        explosionParticles.push({
+            mesh: p,
+            vx: speed * Math.sin(phi) * Math.cos(theta),
+            vy: speed * Math.cos(phi),
+            vz: speed * Math.sin(phi) * Math.sin(theta),
+            life: 2.5
+        });
+    }
+}
+
+export function updateExplosion(dt) {
+    for (let i = explosionParticles.length - 1; i >= 0; i--) {
+        const ep = explosionParticles[i];
+        ep.mesh.position.add(new THREE.Vector3(ep.vx, ep.vy, ep.vz).multiplyScalar(dt));
+        ep.mesh.scale.multiplyScalar(1.03);
+        ep.life -= dt;
+        ep.mesh.material.opacity = Math.max(0, ep.life / 2.5);
+        if (ep.life <= 0) {
+            scene.remove(ep.mesh);
+            explosionParticles.splice(i, 1);
         }
     }
 }
@@ -372,7 +439,6 @@ export function setEnvironmentMode(mode) {
     }
 }
 
-// 🏭 3D 火箭生成工廠
 function createRocketMeshGroup(type) {
     const config = ROCKET_MODELS[type] || ROCKET_MODELS.CZ10A;
     const group = new THREE.Group();
@@ -385,7 +451,7 @@ function createRocketMeshGroup(type) {
     const scaleH = config.heightM / 60.0;
     const coreRadius = (type === 'STARSHIP' || type === 'SATURN_V') ? 0.55 : 0.38;
 
-    // 1. 噴嘴 (基底對齊 y=0)
+    // 1. 噴嘴
     const nozzle = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.9, 0.6, 24), matEngine);
     nozzle.position.y = 0.3;
     group.add(nozzle);
@@ -426,7 +492,7 @@ function createRocketMeshGroup(type) {
     s2.position.y = s2PosY;
     group.add(s2);
 
-    // 5. 整流罩 / 飛船
+    // 5. 整流罩
     const fairingHeight = 1.8 * scaleH;
     const fairingPosY = 0.6 + s1Height + s2Height + fairingHeight / 2;
     const fairing = new THREE.Mesh(new THREE.CylinderGeometry(coreRadius * 0.75, coreRadius * 0.95, fairingHeight, 24), matPayload);
@@ -448,7 +514,6 @@ function createRocketMeshGroup(type) {
     }
     group.add(escapeTower);
 
-    // Starship 專屬襟翼
     if (type === 'STARSHIP') {
         const flapGeo = new THREE.BoxGeometry(0.05, 1.2, 0.8);
         const f1 = new THREE.Mesh(flapGeo, matAccent); f1.position.set(coreRadius * 1.1, fairingPosY, 0);
@@ -472,7 +537,6 @@ export function switchRocketMesh(type) {
     activeRocketParts = createRocketMeshGroup(type);
     rocketGroup.add(activeRocketParts.root);
 
-    // 白熱電漿火柱
     const flameGeo = new THREE.ConeGeometry(0.5, 5.0, 24);
     const flameMat = new THREE.MeshBasicMaterial({ color: 0xffeedd, transparent: true, opacity: 0.95 });
     flameMesh = new THREE.Mesh(flameGeo, flameMat);
@@ -481,15 +545,14 @@ export function switchRocketMesh(type) {
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    // 馬赫錐
     const coneGeo = new THREE.ConeGeometry(1.6, 2.2, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
     machConeMesh.position.y = 7.0;
     rocketGroup.add(machConeMesh);
 
-    // 確保姿態嚴格垂直
     rocketGroup.quaternion.set(0, 0, 0, 1);
+    rocketGroup.visible = true;
 }
 
 export function initRocketScene(containerEl) {
@@ -549,7 +612,7 @@ export function initRocketScene(containerEl) {
     buildLaunchPadAndTower();
 
     rocketGroup = new THREE.Group();
-    rocketGroup.position.set(0, 1000.8, 0); // 嚴格立於排焰台座開口正中央
+    rocketGroup.position.set(0, 1000.8, 0);
     scene.add(rocketGroup);
 
     switchRocketMesh("CZ10A");
