@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 長征全時序自動分離與入軌
+ * js/rocket_game.js - JarAscent 3D 任務主控 (解耦架構)
  * @license MIT
  */
 
@@ -8,10 +8,9 @@ const THREE = window.THREE;
 import { 
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
     getMoonPosition, scene, camera, controls, renderer, rocketGroup, flameMesh,
-    escapeTowerMesh, boostersGroup, stage1Mesh, fairingLeftMesh, fairingRightMesh, stage2Mesh, spacecraftMesh,
-    machConeMesh, spawnDebrisPiece, updateDebris, setEnvironmentMode,
+    activeRocketParts, machConeMesh, spawnDebrisPiece, updateDebris, setEnvironmentMode, switchRocketMesh,
     earthMesh, moonMesh, rocketLight, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
-    ENGINE_DATABASE, R_EARTH, WORLD_SCALE
+    ROCKET_MODELS, R_EARTH, WORLD_SCALE
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -51,17 +50,15 @@ const I18N = {
         lblEnv: "發射場天色時間:", lblEngine: "運載火箭型號:", lblPayload: "任務載荷艙:", lblThrottle: "節流閥推力 (%):",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
         telemetryTitle: "⚙️ 即時飛行與分離狀態", ready: "發射台準備就緒，請點擊發射...",
-        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！長征火箭全力起飛",
-        orbitSuccess: "🏆【入軌成功】神舟飛船精確進入 300km 預定軌道 (SECO)！",
+        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！火箭全力起飛",
+        orbitSuccess: "🏆【入軌成功】航天器精確進入 300km 預定軌道 (SECO)！",
         milestones: {
             escape: "🚀 T+120s 拋掉逃逸塔 (Tower Jettison)!",
-            boosters: "⚡ T+160s 4枚助推器與一級分離!",
+            boosters: "⚡ T+160s 助推器與一級分離!",
             fairing: "✨ T+200s 拋整流罩 (Fairing Separation)!",
-            stage2: "🛰️ T+580s 二級分離，飛船入軌!",
-            orbit: "🏆 飛船太陽翼展開，入軌圓滿成功!"
-        },
-        engines: { CZ2F: "長征二號F (CZ-2F 載人型)", MERLIN: "獵鷹 9 號 (Falcon 9)", RAPTOR: "超重型星艦 (Super Heavy)", SLS: "太空發射系統 (SLS)" },
-        payloads: { "8000": "神舟載人飛船 (8,000 kg)", "2000": "天舟空間站貨運艙 (2,000 kg)", "500": "微重力科學試驗艙 (500 kg)" }
+            stage2: "🛰️ T+580s 二級分離，航天器入軌!",
+            orbit: "🏆 太陽翼展開，入軌圓滿成功!"
+        }
     },
     en: {
         title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & Multi-Stage Staging Sandbox",
@@ -71,17 +68,15 @@ const I18N = {
         lblEnv: "Launch Lighting:", lblEngine: "Launch Vehicle:", lblPayload: "Payload Compartment:", lblThrottle: "Engine Throttle (%):",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
         telemetryTitle: "⚙️ Live Flight & Separation Telemetry", ready: "Pad ready. Awaiting launch sequence...",
-        counting: "⚠️ Terminal countdown sequence in progress...", liftoff: "🔥 Ignition & Liftoff! Long March ascending.",
-        orbitSuccess: "🏆【Orbit Inserted】Shenzhou Spacecraft safely in 300km Orbit!",
+        counting: "⚠️ Terminal countdown sequence in progress...", liftoff: "🔥 Ignition & Liftoff! Ascending into sky.",
+        orbitSuccess: "🏆【Orbit Inserted】Spacecraft safely in 300km Target Orbit!",
         milestones: {
             escape: "🚀 T+120s Launch Escape Tower Jettison!",
-            boosters: "⚡ T+160s 4 Boosters & Stage 1 Separation!",
+            boosters: "⚡ T+160s Boosters & Stage 1 Separation!",
             fairing: "✨ T+200s Fairing Separation!",
             stage2: "🛰️ T+580s Stage 2 Cutoff & Spacecraft Inserted!",
             orbit: "🏆 Solar Panels Deployed. Orbit Complete!"
-        },
-        engines: { CZ2F: "Long March 2F (CZ-2F Crewed)", MERLIN: "Falcon 9 Cluster", RAPTOR: "Super Heavy Starship", SLS: "Space Launch System" },
-        payloads: { "8000": "Shenzhou Crew Capsule (8,000 kg)", "2000": "Tianzhou Cargo Craft (2,000 kg)", "500": "Microgravity Module (500 kg)" }
+        }
     }
 };
 
@@ -116,12 +111,6 @@ function applyLanguageUI() {
     setText('lbl-engine', t.lblEngine); setText('lbl-payload', t.lblPayload);
     setText('lbl-throttle', t.lblThrottle); setText('btn-launch', t.launchBtn);
     setText('btn-reset', t.resetBtn); setText('ui-telemetry-title', t.telemetryTitle);
-    
-    ['sel-engine', 'sel-payload'].forEach(id => {
-        const sel = document.getElementById(id);
-        const dict = id === 'sel-engine' ? t.engines : t.payloads;
-        if (sel) Array.from(sel.options).forEach(opt => { if (dict[opt.value]) opt.text = dict[opt.value]; });
-    });
 }
 
 function initOrbitLine() {
@@ -159,49 +148,40 @@ function updatePredictedOrbit(state) {
     orbitLine.visible = true;
 }
 
-// 🚀 執行 5 段式長征時序分離邏輯
 function handleMultiStageSeparation(rocket) {
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
 
-    // 1. T+120s 拋掉逃逸塔
     if (t >= 120 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
-        spawnDebrisPiece(rocket, escapeTowerMesh, new THREE.Vector3(0, 30, 0));
-        escapeTowerMesh.visible = false;
+        if (activeRocketParts && activeRocketParts.escapeTower) {
+            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 30, 0));
+            activeRocketParts.escapeTower.visible = false;
+        }
         showMilestone(ms.escape, "#ef4444");
     }
 
-    // 2. T+160s 拋掉4個助推器與芯一級 (MECO)
     if (t >= 160 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
-        rocket.stage = 2; // 切換至二級動力
-        spawnDebrisPiece(rocket, boostersGroup, new THREE.Vector3(20, -40, 20));
-        spawnDebrisPiece(rocket, stage1Mesh, new THREE.Vector3(0, -60, 0));
-        boostersGroup.visible = false;
-        stage1Mesh.visible = false;
-        bulletTimeTimer = 3.0; // 觸發慢動作
+        rocket.stage = 2;
+        if (activeRocketParts && activeRocketParts.boosters) {
+            spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(20, -40, 20));
+            activeRocketParts.boosters.visible = false;
+        }
+        bulletTimeTimer = 3.0;
         currentCamMode = CAM_MODE.STAGE_SEP;
         showMilestone(ms.boosters, "#f59e0b");
     }
 
-    // 3. T+200s 出大氣層拋整流罩 (露出神舟飛船)
     if (t >= 200 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
-        spawnDebrisPiece(rocket, fairingLeftMesh, new THREE.Vector3(-25, 0, 10));
-        spawnDebrisPiece(rocket, fairingRightMesh, new THREE.Vector3(25, 0, -10));
-        fairingLeftMesh.visible = false;
-        fairingRightMesh.visible = false;
         showMilestone(ms.fairing, "#38bdf8");
     }
 
-    // 4. T+580s 拋二級火箭，飛船入軌 (SECO)
     if (t >= 580 && !rocket.stage2Separated) {
         rocket.stage2Separated = true;
         rocket.missionAccomplished = true;
         rocket.throttle = 0;
-        spawnDebrisPiece(rocket, stage2Mesh, new THREE.Vector3(0, -30, 0));
-        stage2Mesh.visible = false;
         showMilestone(ms.stage2, "#10b981");
         updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
     }
@@ -251,12 +231,10 @@ function updateTelemetryValues() {
         machConeMesh.material.opacity = isTransonic ? Math.min(0.8, machConeMesh.material.opacity + 0.1) : Math.max(0, machConeMesh.material.opacity - 0.05);
     }
 
-    // 當前分離構型名稱
-    let stageName = "芯一級 + 4助推器 + 逃逸塔";
-    if (rocket.stage2Separated) stageName = "🛰️ 神舟飛船獨立軌道飛行 (Orbiting)";
-    else if (rocket.fairingSeparated) stageName = "芯二級 + 神舟飛船 (無整流罩)";
-    else if (rocket.boostersSeparated) stageName = "芯二級 + 飛船整流罩";
-    else if (rocket.escapeTowerSeparated) stageName = "芯一級 + 4助推器 (已拋逃逸塔)";
+    let stageName = `${rocket.engine.name} 全推力爬升`;
+    if (rocket.stage2Separated) stageName = "🛰️ 航天器 300km 軌道巡航 (Orbiting)";
+    else if (rocket.boostersSeparated) stageName = "二級主動力推進 (Stage 2 Burn)";
+    else if (rocket.escapeTowerSeparated) stageName = "芯一級 + 助推器全推力";
     setText('t-stage-name', stageName);
 
     setText('t-thrust', `${(rocket.getThrustVector().length()/1000).toFixed(0)} kN`);
@@ -273,7 +251,6 @@ function updateTelemetryValues() {
         setText('t-deltav', `${distToMoon.toFixed(0)} km`);
     }
 
-    // 🏆 最終 300km 入軌結算
     if (rocket.missionAccomplished && !milestoneShown.orbit) {
         milestoneShown.orbit = true;
         showMissionDebrief(orbit);
@@ -299,7 +276,7 @@ function showMissionDebrief(orbit) {
     if (orbit.isOrbital) {
         if (periErr < 3.0) {
             rankEl.innerText = "S+"; rankEl.style.color = "#f43f5e";
-            titleEl.innerText = "🌟 傳奇神舟導航官 (Grandmaster Ace)";
+            titleEl.innerText = "🌟 傳奇星際導航官 (Grandmaster Ace)";
         } else if (periErr < 10.0) {
             rankEl.innerText = "S"; rankEl.style.color = "#fbbf24";
             titleEl.innerText = "🏆 完美入軌指揮官 (Orbital Ace)";
@@ -337,7 +314,7 @@ function startCountdownSequence() {
 
 function executeLiftoff() {
     let engKey = document.getElementById('sel-engine').value;
-    if (!ENGINE_DATABASE[engKey]) engKey = "CZ2F";
+    if (!ROCKET_MODELS[engKey]) engKey = "CZ10A";
     
     let payload = parseInt(document.getElementById('sel-payload').value, 10);
     if (isNaN(payload)) payload = 8000;
@@ -367,9 +344,13 @@ function bindUI() {
     document.getElementById('btn-launch').onclick = startCountdownSequence;
     document.getElementById('btn-reset').onclick = () => location.reload();
     
-    // ☀️/🌙 晝夜切換
     document.getElementById('sel-env').onchange = (e) => {
         setEnvironmentMode(e.target.value);
+    };
+
+    // 🚀 切換下拉選單時即時更換 3D 模型
+    document.getElementById('sel-engine').onchange = (e) => {
+        switchRocketMesh(e.target.value);
     };
 
     document.getElementById('rng-throttle').oninput = (e) => { 
@@ -430,7 +411,6 @@ function gameLoop(now) {
             remainingDt -= stepDt;
         }
 
-        // 🚀 執行 5 段式全流程分離檢查
         handleMultiStageSeparation(rocket);
         updateDebris(dt * currentEffectiveTimeScale);
 
