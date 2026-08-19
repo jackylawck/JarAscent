@@ -1,2 +1,2 @@
 # JarAscent
-躍上天穹 3D | JarAscent 3D
+躍上穹蒼 3D | JarAscent 3D
