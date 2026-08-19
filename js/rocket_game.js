@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
+ * js/rocket_game.js - JarAscent 3D 任務主控與姿態制導
  * @license MIT
  */
 
@@ -67,7 +67,7 @@ const I18N = {
         lblStatStatus: "任務狀態", lblStatMaxvel: "最高速度", lblStatMaxq: "最大動態氣壓", lblStatPeri: "近地點誤差", lblStatOrbit: "最終軌道", lblStatFuel: "剩餘燃料裕度",
         envOptions: { DAY: "☀️ 白天發射 (Day Launch)", NIGHT: "🌙 夜間發射 (Night Launch)" },
         payloadOptions: { "8000": "新一代載人飛船 (8,000 kg)", "15000": "空間站核心艙 (15,000 kg)", "35000": "重型補給艙 (35,000 kg)", "60000": "極限超重載荷 (60,000 kg) ⚠️" },
-        milestones: { escape: "🚀 T+120s 拋掉逃逸塔!", boosters: "⚡ T+160s 助推器與一級分離!", fairing: "✨ T+200s 拋整流罩!", stage2: "🛰️ T+580s 二級分離入軌!", orbit: "🏆 太陽翼展開，入軌圓滿成功!" }
+        milestones: { escape: "🚀 T+20s 拋掉逃逸塔 (Tower Jettison)!", boosters: "⚡ T+45s 一級/助推器分離 (Stage 1 Sep)!", fairing: "✨ T+60s 拋整流罩 (Fairing Sep)!", stage2: "🛰️ T+110s 二級熄火，入軌成功 (SECO)!", orbit: "🏆 太陽翼展開，入軌圓滿成功!" }
     },
     en: {
         title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & Custom Staging Sandbox", langBtn: "中文 (繁體)",
@@ -93,7 +93,7 @@ const I18N = {
         lblStatStatus: "Mission Status", lblStatMaxvel: "Max Velocity", lblStatMaxq: "Max Dyn Pressure (Max-Q)", lblStatPeri: "Periapsis Deviation", lblStatOrbit: "Final Orbit", lblStatFuel: "Propellant Margin",
         envOptions: { DAY: "☀️ Day Launch (Sunny)", NIGHT: "🌙 Night Launch (Starfield)" },
         payloadOptions: { "8000": "Crewed Spacecraft (8,000 kg)", "15000": "Space Station Module (15,000 kg)", "35000": "Heavy Cargo Pod (35,000 kg)", "60000": "Extreme Overload Pod (60,000 kg) ⚠️" },
-        milestones: { escape: "🚀 T+120s Launch Escape Tower Jettison!", boosters: "⚡ T+160s Boosters & Core Sep!", fairing: "✨ T+200s Fairing Separation!", stage2: "🛰️ T+580s Stage 2 Cutoff & Insertion!", orbit: "🏆 Solar Panels Deployed. Orbit Complete!" }
+        milestones: { escape: "🚀 T+20s Tower Jettison!", boosters: "⚡ T+45s Stage 1 Separation!", fairing: "✨ T+60s Fairing Separation!", stage2: "🛰️ T+110s Stage 2 Cutoff & Inserted!", orbit: "🏆 Solar Panels Deployed. Orbit Complete!" }
     }
 };
 
@@ -102,7 +102,7 @@ function updateStatus(text, color="#38bdf8") { const el = document.getElementByI
 
 function showMilestone(text, color) {
     const el = document.createElement('div');
-    el.style.cssText = `position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 2.0rem; font-weight: 900; color: ${color}; text-shadow: 0 0 25px ${color}, 0 0 50px rgba(0,0,0,0.8); pointer-events: none; z-index: 300; letter-spacing: 2px; animation: milestonePop 2.5s ease-out forwards; font-family: 'Courier New', monospace; text-align: center; width: 90vw;`;
+    el.style.cssText = `position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 1.6rem; font-weight: 900; color: ${color}; text-shadow: 0 0 20px ${color}, 0 0 40px rgba(0,0,0,0.8); pointer-events: none; z-index: 300; letter-spacing: 1px; animation: milestonePop 2.5s ease-out forwards; font-family: 'Courier New', monospace; text-align: center; width: 90vw;`;
     el.innerText = text; document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
 }
 
@@ -221,25 +221,48 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
+// 🛰️ 真實多級分離時序（配合航程可視化）
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
 
-    if (t >= 120 && !rocket.escapeTowerSeparated) {
+    // 1. T+20s: 拋逃逸塔
+    if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
-        if (activeRocketParts && activeRocketParts.escapeTower) { spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 30, 0)); activeRocketParts.escapeTower.visible = false; }
+        if (activeRocketParts && activeRocketParts.escapeTower) {
+            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 40, 0));
+            activeRocketParts.escapeTower.visible = false;
+        }
         showMilestone(ms.escape, "#ef4444");
     }
-    if (t >= 160 && !rocket.boostersSeparated) {
-        rocket.boostersSeparated = true; rocket.stage = 2;
-        if (activeRocketParts && activeRocketParts.boosters) { spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(20, -40, 20)); activeRocketParts.boosters.visible = false; }
-        bulletTimeTimer = 3.0; currentCamMode = CAM_MODE.STAGE_SEP; showMilestone(ms.boosters, "#f59e0b");
+
+    // 2. T+45s: 助推器/一級分離，進入二級燃燒
+    if (t >= 45 && !rocket.boostersSeparated) {
+        rocket.boostersSeparated = true;
+        rocket.stage = 2;
+        if (activeRocketParts && activeRocketParts.boosters) {
+            spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(15, -30, 15));
+            activeRocketParts.boosters.visible = false;
+        }
+        bulletTimeTimer = 2.5;
+        currentCamMode = CAM_MODE.STAGE_SEP;
+        showMilestone(ms.boosters, "#f59e0b");
     }
-    if (t >= 200 && !rocket.fairingSeparated) { rocket.fairingSeparated = true; showMilestone(ms.fairing, "#38bdf8"); }
-    if (t >= 580 && !rocket.stage2Separated) {
-        rocket.stage2Separated = true; rocket.missionAccomplished = true; rocket.throttle = 0;
-        showMilestone(ms.stage2, "#10b981"); updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
+
+    // 3. T+60s: 拋整流罩
+    if (t >= 60 && !rocket.fairingSeparated) {
+        rocket.fairingSeparated = true;
+        showMilestone(ms.fairing, "#38bdf8");
+    }
+
+    // 4. T+110s: 二級入軌關機 (SECO)
+    if (t >= 110 && !rocket.stage2Separated) {
+        rocket.stage2Separated = true;
+        rocket.missionAccomplished = true;
+        rocket.throttle = 0;
+        showMilestone(ms.stage2, "#10b981");
+        updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
     }
 }
 
@@ -257,6 +280,11 @@ function updateTelemetryValues() {
     setText('hud-alt', `${(alt / 1000).toFixed(1)} km`);
     setText('hud-vel', `${speed.toFixed(0)} m/s (M${mach})`);
     
+    const altEl = document.getElementById('hud-alt');
+    if (alt < 30000) altEl.style.color = '#f97316';
+    else if (alt < 100000) altEl.style.color = '#fbbf24';
+    else altEl.style.color = '#38bdf8';
+
     const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * airSpeed * airSpeed / 1000);
     const qBar = document.getElementById('gauge-q-bar');
     if (qBar) qBar.style.width = `${Math.min(100, (dynQkPa / 55) * 100)}%`;
@@ -277,6 +305,7 @@ function updateTelemetryValues() {
     let stageName = `${currentLang==='zh'?rocket.engine.name:rocket.engine.nameEn} (${t.ascending})`;
     if (rocket.isDestroyed) stageName = "💥 CATASTROPHIC FAILURE";
     else if (rocket.stage2Separated) stageName = "🛰️ 300km Orbit Cruise";
+    else if (rocket.boostersSeparated) stageName = "Stage 2 Burn";
     setText('t-stage-name', stageName);
     setText('t-orbit', orbit.isOrbital ? t.stableOrbit : t.ascending);
 
@@ -319,7 +348,12 @@ function startCountdownSequence() {
     if (isCountingDown) return;
     isCountingDown = true; countdownTime = 10;
     document.getElementById('countdown-hud').style.display = 'flex';
-    document.getElementById('btn-launch').style.display = 'none';
+    
+    // 📱 手機優化：點擊發射瞬間立刻隱藏主面板，避免遮擋全景
+    isUIVisible = false;
+    const box = document.getElementById('ui-overlay-box');
+    if (box) box.classList.add('collapsed');
+    setText('btn-toggle-ui', I18N[currentLang].toggleUiHide);
     
     const timerInterval = setInterval(() => {
         countdownTime--;
@@ -415,7 +449,10 @@ function gameLoop(now) {
             
         rocketGroup.scale.set(visualScale, visualScale, visualScale);
         rocketGroup.position.copy(visualPos);
-        rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), rocket.thrustDir.clone().normalize());
+        
+        // 🚀 平滑航向角：鎖定真實推力指向
+        const thrustDir = rocket.thrustDir.clone().normalize();
+        rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
         if (bulletTimeTimer <= 0) {
             if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
@@ -452,11 +489,11 @@ function gameLoop(now) {
 
         camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.09);
 
+        // 🔥 尾焰向發動機下方噴射
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
             if (flameMesh) { 
                 flameMesh.visible = true; 
-                flameMesh.material.color.setHex(0xffaa00);
                 flameMesh.scale.set(1.0, rocket.throttle || 1.0, 1.0); 
             }
             spawnExhaustParticles(visualPos, rocket.throttle * visualScale, alt < 3000);
@@ -467,7 +504,7 @@ function gameLoop(now) {
         }
         
         velArrow.position.copy(visualPos); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(15);
-        thrustArrow.position.copy(visualPos); thrustArrow.setDirection(rocket.thrustDir.clone().normalize()); thrustArrow.setLength(10);
+        thrustArrow.position.copy(visualPos); thrustArrow.setDirection(thrustDir); thrustArrow.setLength(10);
         velArrow.visible = (alt > 2000); thrustArrow.visible = (alt > 2000 && thrustMag > 0);
 
         updatePredictedOrbit(rocket);
