@@ -1,6 +1,8 @@
 /**
- * js/physics_core.js - 科研級天體動力學與 RK4 積分核心
+ * js/physics_core.js - 天體動力學與結構力學核心
+ * @license MIT
  */
+
 const THREE = window.THREE;
 import { ROCKET_MODELS } from './rockets_data.js';
 
@@ -153,7 +155,7 @@ export function computeDerivatives(state) {
 
     state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
 
-    // 🛡️ WGS-84 大氣共轉相對風場計算
+    // WGS-84 大氣共轉相對風場計算
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
