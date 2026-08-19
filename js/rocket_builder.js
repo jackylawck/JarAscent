@@ -1,6 +1,8 @@
 /**
- * js/rocket_builder.js - 3D 模型自動構建工廠
+ * js/rocket_builder.js - 3D 幾何模型生成工廠
+ * @license MIT
  */
+
 const THREE = window.THREE;
 import { ROCKET_MODELS } from './rockets_data.js';
 
@@ -16,7 +18,7 @@ export function createRocketMesh(type) {
     const scaleH = config.heightM / 60.0;
     const coreRadius = (type === 'STARSHIP' || type === 'SATURN_V') ? 0.55 : 0.38;
 
-    // 1. 噴嘴
+    // 1. 發動機噴嘴 (y=0 ~ y=0.6)
     const nozzle = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.9, 0.6, 24), matEngine);
     nozzle.position.y = 0.3;
     group.add(nozzle);
@@ -62,6 +64,7 @@ export function createRocketMesh(type) {
     const fairingPosY = 0.6 + s1Height + s2Height + fairingHeight / 2;
     const fairing = new THREE.Mesh(new THREE.CylinderGeometry(coreRadius * 0.75, coreRadius * 0.95, fairingHeight, 24), matPayload);
     fairing.position.y = fairingPosY;
+
     const noseHeight = 1.4 * scaleH;
     const nosePosY = fairingPosY + fairingHeight / 2 + noseHeight / 2;
     const nose = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.75, noseHeight, 24), matBody);
@@ -69,7 +72,7 @@ export function createRocketMesh(type) {
     group.add(fairing);
     group.add(nose);
 
-    // 6. 逃逸塔（精確貼合鼻錐）
+    // 6. 逃逸塔 (修復：精確貼合鼻錐頂部)
     const escapeTower = new THREE.Group();
     if (config.hasTower) {
         const topY = nosePosY + noseHeight / 2;
