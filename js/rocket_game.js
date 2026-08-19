@@ -1,6 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (Final QA 商業級優化版)
- * 包含：相機緩衝平滑插值、深度遙測優雅佔位符、S+ 級嚴苛評分挑戰
+ * js/rocket_game.js - JarAscent 3D 升空主控與相機追焦
  * @license MIT
  */
 
@@ -8,7 +7,7 @@ const THREE = window.THREE;
 
 import { 
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
-    getMoonPosition, scene, camera, controls, renderer, rocketGroup, 
+    getMoonPosition, scene, camera, controls, renderer, rocketGroup, flameMesh,
     stage1Mesh, machConeMesh, spawnDebris, updateDebris,
     earthMesh, moonMesh, rocketLight, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
     ENGINE_DATABASE, R_EARTH, WORLD_SCALE
@@ -28,7 +27,6 @@ let bulletTimeTimer = 0;
 let isUIVisible = true;
 let isDetailTelemetryVisible = false;
 
-// 🎬 電影級相機模式狀態機與目標位置緩衝區
 export const CAM_MODE = {
     LAUNCH_PAD: 0,
     LIFTOFF: 1,
@@ -41,7 +39,6 @@ let currentCamMode = CAM_MODE.LAUNCH_PAD;
 let targetCamPos = new THREE.Vector3();
 let targetLookAt = new THREE.Vector3();
 
-// 🏆 任務即時里程碑觸發旗標
 let milestoneShown = { mach1: false, maxq: false, stage_sep: false, orbit: false };
 
 const I18N = {
@@ -162,7 +159,6 @@ function updatePredictedOrbit(state) {
 
 function updateTelemetryValues() {
     if (!rocket) {
-        // 未發射前佔位符防禦
         if (isDetailTelemetryVisible) {
             setText('t-gforce', '1.00 G');
             setText('t-isp', '—');
@@ -184,7 +180,6 @@ function updateTelemetryValues() {
         ? Math.max(0, Math.round((rocket.fuel1 / rocket.engine.fuelMassStage1) * 100))
         : Math.max(0, Math.round((rocket.fuel2 / rocket.engine.fuelMassStage2) * 100));
 
-    // 1. 頂部 HUD (核心大字)
     setText('hud-time', `${rocket.flightTime.toFixed(1)}s`);
     setText('hud-alt', `${altKm} km`);
     setText('hud-vel', `${speed.toFixed(0)} m/s (M${mach})`);
@@ -210,12 +205,10 @@ function updateTelemetryValues() {
         machConeMesh.material.opacity = isTransonic ? Math.min(0.8, machConeMesh.material.opacity + 0.1) : Math.max(0, machConeMesh.material.opacity - 0.05);
     }
 
-    // 2. 精簡即時摘要
     setText('t-mass', `${Math.round(rocket.getCurrentMass()).toLocaleString()} kg`);
     setText('t-thrust', `${(rocket.getThrustVector().length()/1000).toFixed(0)} kN`);
     setText('t-orbit', orbit.isOrbital ? "🟢 束縛軌道 (Bound Orbit)" : "🟡 次軌道拋物線 (Suborbital)");
 
-    // 3. 深度科研遙測數據 (精準數據與防禦佔位符)
     if (isDetailTelemetryVisible) {
         setText('t-gforce', rocket.flightTime > 0 ? `${rocket.currentGForce.toFixed(2)} G` : '1.00 G');
         setText('t-isp', rocket.flightTime > 0 ? `${Math.round(rocket.getIsp())} s` : '—');
@@ -227,7 +220,6 @@ function updateTelemetryValues() {
         setText('t-deltav', `${distToMoon.toFixed(0)} km`);
     }
 
-    // 🏆 里程碑即時判定
     const t = I18N[currentLang].milestones;
     if (speed >= 340 && !milestoneShown.mach1) {
         milestoneShown.mach1 = true;
@@ -252,7 +244,6 @@ function updateTelemetryValues() {
     }
 }
 
-// 🏆 SpaceX 級挑戰階梯結算判定
 function showMissionDebrief(orbit) {
     const modal = document.getElementById('debrief-modal');
     if (modal.style.display === 'flex') return;
@@ -433,9 +424,11 @@ function gameLoop(now) {
         rocketGroup.scale.set(visualScale, visualScale, visualScale);
         rocketGroup.position.copy(visualPos);
         
+        // 修正：火箭姿態精確朝向推力方向 (垂直時 quat 為單位元)
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
+        // 🎬 根據高度與速度切換電影級視角
         if (bulletTimeTimer <= 0) {
             if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
             else if (speed > 310 && speed < 440 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
@@ -448,15 +441,14 @@ function gameLoop(now) {
         const shakeY = (Math.random() - 0.5) * cameraShake * 2;
         if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.8);
 
-        // 🎬 電影級目標緩衝區計算 (消滅相機突兀跳動)
         switch (currentCamMode) {
             case CAM_MODE.LIFTOFF:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-18 + shakeX, 8 + shakeY, 18)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 4, 0)));
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 5, 0)));
                 break;
             case CAM_MODE.MAX_Q:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(35 + shakeX, 5 + shakeY, 0)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 2, 0)));
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
             case CAM_MODE.STAGE_SEP:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
@@ -471,22 +463,28 @@ function gameLoop(now) {
             default:
                 let camDist = (alt < 2000) ? 25 + alt * 0.01 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 2, 0)));
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
         }
 
-        // 緩入緩出平滑差值
         camera.position.lerp(targetCamPos, 0.06);
         controls.target.lerp(targetLookAt, 0.07);
 
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
+            // 點火時顯示高亮電漿錐形火柱，並產生長尾排焰煙霧
+            if (flameMesh) {
+                flameMesh.visible = true;
+                const pulse = 1.0 + (Math.random() - 0.5) * 0.2;
+                flameMesh.scale.set(pulse, pulse * (rocket.throttle || 1.0), pulse);
+            }
             spawnExhaustParticles(visualPos, rocket.throttle * visualScale, alt < 3000);
             if (rocketLight) {
                 rocketLight.position.copy(visualPos);
-                rocketLight.intensity = 5.0;
+                rocketLight.intensity = 6.0;
             }
         } else {
+            if (flameMesh) flameMesh.visible = false;
             if (rocketLight) rocketLight.intensity = 0.0;
         }
         
@@ -497,6 +495,7 @@ function gameLoop(now) {
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
     } else {
+        if (flameMesh) flameMesh.visible = false;
         if (velArrow) velArrow.visible = false;
         if (thrustArrow) thrustArrow.visible = false;
         if (rocketLight) rocketLight.intensity = 0.0;
