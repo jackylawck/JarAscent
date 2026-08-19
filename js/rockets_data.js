@@ -1,5 +1,5 @@
 /**
- * js/rockets_data.js - 全球火箭規格、塗裝與多語系字典
+ * js/rockets_data.js - 全球火箭規格與多語系字典
  * @license MIT
  */
 
