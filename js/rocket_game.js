@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換 (全選項翻譯 + 升空視角拉開)
+ * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
  * @license MIT
  */
 
@@ -634,7 +634,6 @@ function gameLoop(now) {
         if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.8);
 
         switch (currentCamMode) {
-            // ✅ 修正點：LIFTOFF 模式改為跟隨火箭位置，並加上偏移，保持仰望視角
             case CAM_MODE.LIFTOFF:
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-18 + shakeX, 8 + shakeY, 18)));
                 targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 5, 0)));
