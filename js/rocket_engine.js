@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 渲染、特效與太空漸變系統
+ * js/rocket_engine.js - 3D 渲染、場景構建與視覺特效
  * @license MIT
  */
 
@@ -15,9 +15,7 @@ export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLig
 export let velArrow, thrustArrow;
 export let debrisList = [];
 export let explosionParticles = [];
-export let starFieldMesh = null; // 控制星空透明度
-
-export { ROCKET_MODELS };
+export let starFieldMesh = null;
 
 function createEarthTexture() {
     const canvas = document.createElement('canvas');
@@ -53,22 +51,32 @@ function createStarField() {
     return starFieldMesh;
 }
 
-// 🌌 天空到宇宙的無縫過渡
 export function updateEnvironmentVisuals(alt) {
     if (!scene) return;
-    const ratio = Math.min(1.0, Math.max(0.0, alt / 80000)); // 80km完全進入太空黑
-    
-    // 顏色過渡
+    const ratio = Math.min(1.0, Math.max(0.0, alt / 80000));
     const skyColor = new THREE.Color(0x38bdf8);
     const spaceColor = new THREE.Color(0x020617);
     scene.background = skyColor.clone().lerp(spaceColor, ratio);
-    
-    // 霧氣消散
     scene.fog.density = 0.0003 * (1.0 - ratio);
-    
-    // 星空浮現
     if (starFieldMesh) {
         starFieldMesh.material.opacity = ratio * 0.9;
+    }
+}
+
+export function setEnvironmentMode(mode) {
+    if (!scene) return;
+    if (mode === 'DAY') {
+        scene.background = new THREE.Color(0x38bdf8);
+        scene.fog.color = new THREE.Color(0xbae6fd);
+        scene.fog.density = 0.0003;
+        if (sunLight) { sunLight.color.setHex(0xffffff); sunLight.intensity = 2.8; }
+        if (hemiLight) { hemiLight.color.setHex(0xe0f2fe); hemiLight.groundColor.setHex(0x334155); hemiLight.intensity = 1.2; }
+    } else {
+        scene.background = new THREE.Color(0x020617);
+        scene.fog.color = new THREE.Color(0x020617);
+        scene.fog.density = 0.0001;
+        if (sunLight) { sunLight.color.setHex(0xffedd5); sunLight.intensity = 1.8; }
+        if (hemiLight) { hemiLight.color.setHex(0x1e293b); hemiLight.groundColor.setHex(0x020617); hemiLight.intensity = 0.6; }
     }
 }
 
@@ -82,18 +90,18 @@ export function switchRocketMesh(type) {
     rocketGroup.add(activeRocketParts.root);
 
     const flameGeo = new THREE.ConeGeometry(0.5, 5.0, 24);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffeedd, transparent: true, opacity: 0.95 });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.95 });
     flameMesh = new THREE.Mesh(flameGeo, flameMat);
     flameMesh.position.y = -2.5;
     flameMesh.rotation.x = Math.PI;
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    // 🌪️ 修復：馬赫錐變寬、位置往上移避開箭體、改用半透明加法混合
     const coneGeo = new THREE.ConeGeometry(2.5, 3.5, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
     machConeMesh.position.y = activeRocketParts.nosePosY || 9.0;
+    machConeMesh.visible = false;
     rocketGroup.add(machConeMesh);
 
     rocketGroup.quaternion.set(0, 0, 0, 1);
