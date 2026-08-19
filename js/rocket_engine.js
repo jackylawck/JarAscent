@@ -6,7 +6,7 @@
 const THREE = window.THREE;
 import { createRocketMesh } from './rocket_builder.js';
 import { ROCKET_MODELS } from './rockets_data.js';
-// 🛡️ 正確導入 MU 與其他必要常數
+// 🛡️ 完整導入 MU、R_EARTH、R_MOON、WORLD_SCALE 與 getMoonPosition
 import { MU, R_EARTH, R_MOON, WORLD_SCALE, getMoonPosition } from './physics_core.js';
 
 export let scene, camera, renderer, controls;
@@ -281,7 +281,7 @@ export function spawnDebrisPiece(state, mesh, relVel) {
     });
 }
 
-// 🛡️ 使用已導入的 MU 常數進行萬有引力計算
+// 🛡️ [已修復] 嚴格使用導入的 MU 常數
 export function updateDebris(dt) {
     for (let i = debrisList.length - 1; i >= 0; i--) {
         const d = debrisList[i];
