@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - JarAscent 3D v6.1 (WGS-84 大氣共轉熱修復版)
+ * js/rocket_engine.js - JarAscent 3D 物理核心與 3D 火箭工廠
  * @license MIT
  */
 
@@ -10,7 +10,7 @@ export const MU_MOON = 4.9048695e12;
 export const R_EARTH = 6378137;
 export const R_MOON = 1737400;
 export const MOON_ORBIT_RADIUS = 384400000;
-export const ROTATION_SPEED = 7.292115e-5; // 地球自轉角速度 (rad/s)
+export const ROTATION_SPEED = 7.292115e-5;
 export const J2 = 1.08262668e-3;
 
 export const WORLD_SCALE = 1000 / R_EARTH; 
@@ -97,8 +97,8 @@ export function getMoonPosition(time) {
 
 export class RocketState {
     constructor() {
-        this.r = new THREE.Vector3(0, R_EARTH, 0); // 垂直發射台頂點
-        this.v = new THREE.Vector3(0, 0, 0);       // 初始慣性速度 (剛體鎖定發射台)
+        this.r = new THREE.Vector3(0, R_EARTH, 0);
+        this.v = new THREE.Vector3(0, 0, 0);
         this.mass = 0;
         this.fuel1 = 0;
         this.fuel2 = 0;
@@ -126,7 +126,7 @@ export class RocketState {
         this.maxVelocity = 0;
         this.maxQ = 0;
         this.currentGForce = 1.0;
-        this.relativeAirSpeed = 0; // WGS-84 大氣相對風速 (m/s)
+        this.relativeAirSpeed = 0;
     }
 
     initEngine(engineKey, payloadMass, fuelFactor = 1.0, turnAltKm = 8) {
@@ -207,10 +207,8 @@ export function computeDerivatives(state, dt) {
     const rMag = r.length();
     const mass = state.getCurrentMass();
 
-    // 1. 中心天體萬有引力
     const gravity = r.clone().multiplyScalar(-MU / Math.pow(rMag, 3));
 
-    // 2. J2 地球扁率攝動加速度 (Y 軸為自轉極軸)
     const x = r.x, y = r.y, z = r.z;
     const rMag2 = rMag * rMag;
     const coeff = 1.5 * J2 * MU * Math.pow(R_EARTH, 2) / (rMag2 * rMag2 * rMag);
@@ -221,35 +219,30 @@ export function computeDerivatives(state, dt) {
         coeff * z * (5 * yRatio - 1)
     );
 
-    // 3. 第三體月球引力攝動
     const moonPos = getMoonPosition(state.flightTime);
     const rToMoon = moonPos.clone().sub(r);
     const moonAcc = rToMoon.clone().multiplyScalar(MU_MOON / Math.pow(rToMoon.length(), 3))
                     .sub(moonPos.clone().multiplyScalar(MU_MOON / Math.pow(moonPos.length(), 3)));
 
-    // 4. 發動機主動推力
     const thrustVec = state.getThrustVector();
     const thrustAcc = thrustVec.clone().divideScalar(mass);
 
     state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
 
-    // 5. 🛡️ [熱修復核心] WGS-84 大氣共轉相對風場與真實動壓計算
+    // 🛡️ WGS-84 大氣共轉相對風場
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
-        // 地球大氣隨自轉角速度向量 (繞 Y 軸旋轉)
         const omegaVec = new THREE.Vector3(0, ROTATION_SPEED, 0);
         const atmosVel = new THREE.Vector3().crossVectors(omegaVec, r);
-        
-        // 相對大氣速度 = 慣性速度 - 大氣共轉線速度
         const relV = v.clone().sub(atmosVel);
         const speed = relV.length();
         state.relativeAirSpeed = speed;
 
         if (speed > 0.1) {
-            const rho = 1.225 * Math.exp(-alt / 8500); // 美國標準大氣指數衰減模型
-            const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28; // 跨音速阻力係數膨脹
-            const dynQ = 0.5 * rho * speed * speed; // 嚴格科學動態氣壓 (Pa)
+            const rho = 1.225 * Math.exp(-alt / 8500);
+            const Cd = (speed > 300 && speed < 600) ? 0.45 : 0.28;
+            const dynQ = 0.5 * rho * speed * speed;
             if (dynQ > state.maxQ) state.maxQ = dynQ;
             dragAcc = relV.normalize().multiplyScalar(-dynQ * Cd * 10.5 / mass);
         }
@@ -439,6 +432,7 @@ export function setEnvironmentMode(mode) {
     }
 }
 
+// 🏭 修正逃逸塔貼合、整流罩比例與多型號外觀
 function createRocketMeshGroup(type) {
     const config = ROCKET_MODELS[type] || ROCKET_MODELS.CZ10A;
     const group = new THREE.Group();
@@ -451,7 +445,7 @@ function createRocketMeshGroup(type) {
     const scaleH = config.heightM / 60.0;
     const coreRadius = (type === 'STARSHIP' || type === 'SATURN_V') ? 0.55 : 0.38;
 
-    // 1. 噴嘴
+    // 1. 發動機噴嘴 (基底對齊 y=0)
     const nozzle = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.9, 0.6, 24), matEngine);
     nozzle.position.y = 0.3;
     group.add(nozzle);
@@ -492,24 +486,27 @@ function createRocketMeshGroup(type) {
     s2.position.y = s2PosY;
     group.add(s2);
 
-    // 5. 整流罩
+    // 5. 整流罩 / 飛船
     const fairingHeight = 1.8 * scaleH;
     const fairingPosY = 0.6 + s1Height + s2Height + fairingHeight / 2;
     const fairing = new THREE.Mesh(new THREE.CylinderGeometry(coreRadius * 0.75, coreRadius * 0.95, fairingHeight, 24), matPayload);
     fairing.position.y = fairingPosY;
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.75, 1.4 * scaleH, 24), matBody);
-    nose.position.y = fairingPosY + fairingHeight / 2 + (0.7 * scaleH);
+    const noseHeight = 1.4 * scaleH;
+    const nosePosY = fairingPosY + fairingHeight / 2 + noseHeight / 2;
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(coreRadius * 0.75, noseHeight, 24), matBody);
+    nose.position.y = nosePosY;
     group.add(fairing);
     group.add(nose);
 
-    // 6. 逃逸塔
+    // 6. 逃逸塔 (修復：精確貼合在鼻錐頂端)
     const escapeTower = new THREE.Group();
     if (config.hasTower) {
-        const topY = nose.position.y + 0.7 * scaleH;
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, 2.2 * scaleH, 12), matAccent);
-        pole.position.y = topY + 1.1 * scaleH;
+        const topY = nosePosY + noseHeight / 2;
+        const towerHeight = 2.0 * scaleH;
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, towerHeight, 12), matAccent);
+        pole.position.y = topY + towerHeight / 2;
         const tNozzle = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4 * scaleH, 12), matEngine);
-        tNozzle.position.y = topY + 2.2 * scaleH;
+        tNozzle.position.y = topY + towerHeight + (0.2 * scaleH);
         escapeTower.add(pole); escapeTower.add(tNozzle);
     }
     group.add(escapeTower);
