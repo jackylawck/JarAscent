@@ -1,23 +1,17 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
+ * js/rocket_game.js - JarAscent 3D 任務主控 (高空對數視覺平滑優化版)
  * @license MIT
  */
 
 const THREE = window.THREE;
 
 import { 
-    RocketState, rk4Step, executeGuidance, getOrbitalElements,
-    getMoonPosition, R_EARTH, WORLD_SCALE
-} from './physics_core.js';
-
-import { ROCKET_MODELS } from './rockets_data.js';
-
-import { 
-    initRocketScene, setEnvironmentMode, switchRocketMesh,
-    triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
-    spawnExhaustParticles, updateExhaustParticles,
-    scene, camera, controls, renderer, rocketGroup, flameMesh,
-    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
+    initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
+    getMoonPosition, scene, camera, controls, renderer, rocketGroup, flameMesh,
+    activeRocketParts, machConeMesh, spawnDebrisPiece, updateDebris, setEnvironmentMode, switchRocketMesh,
+    triggerCatastrophicExplosion, updateExplosion,
+    earthMesh, moonMesh, rocketLight, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
+    ROCKET_MODELS, R_EARTH, WORLD_SCALE
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -618,9 +612,19 @@ function gameLoop(now) {
 
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
         const speed = rocket.v.length();
-        const visualPos = rocket.r.clone().multiplyScalar(WORLD_SCALE);
         
-        const visualScale = (alt < 5000) ? 1.0 : Math.min(25.0, 1.0 + (alt / 10000) * 0.5);
+        // 🚀【雙尺度視覺映射】
+        const visualAlt = (alt < 5000) 
+            ? 0.4 + (alt * 0.035) 
+            : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
+
+        const visualPos = rocket.r.clone().normalize().multiplyScalar(1000 + visualAlt);
+        
+        // 🌟【對數平滑高空縮放優化】低空等身，高空對數漸進，在 300km 軌道與地球比例達到最和諧狀態
+        const visualScale = (alt < 5000) 
+            ? 1.0 
+            : Math.min(10.0, 1.0 + Math.log10(1 + (alt - 5000) / 1000) * 3.5);
+            
         rocketGroup.scale.set(visualScale, visualScale, visualScale);
         rocketGroup.position.copy(visualPos);
         
@@ -641,32 +645,32 @@ function gameLoop(now) {
 
         switch (currentCamMode) {
             case CAM_MODE.LIFTOFF:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-18 + shakeX, 8 + shakeY, 18)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 5, 0)));
+                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-14 + shakeX, 6 + shakeY, 14)));
+                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 4, 0)));
                 break;
             case CAM_MODE.MAX_Q:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(35 + shakeX, 5 + shakeY, 0)));
+                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(30 + shakeX, 5 + shakeY, 0)));
                 targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
             case CAM_MODE.STAGE_SEP:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(14 * Math.cos(now * 0.002), 4, 14 * Math.sin(now * 0.002))));
+                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
                 targetLookAt.copy(visualPos);
                 break;
             case CAM_MODE.ORBIT:
-                const orbitCamDist = Math.max(600, orbit.semiMajorAxis * WORLD_SCALE * 1.3);
+                const orbitCamDist = Math.max(500, orbit.semiMajorAxis * WORLD_SCALE * 1.2);
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.5, orbitCamDist)));
                 targetLookAt.set(0, 0, 0);
                 break;
             case CAM_MODE.ASCEND:
             default:
-                let camDist = (alt < 2000) ? 30 + alt * 0.015 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
+                let camDist = (alt < 2000) ? 25 + alt * 0.015 : Math.min(2500, Math.max(40, alt * WORLD_SCALE * 1.5));
                 targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
                 targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0)));
                 break;
         }
 
-        camera.position.lerp(targetCamPos, 0.06);
-        controls.target.lerp(targetLookAt, 0.07);
+        camera.position.lerp(targetCamPos, 0.08);
+        controls.target.lerp(targetLookAt, 0.09);
 
         const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
@@ -694,7 +698,7 @@ function gameLoop(now) {
     } else {
         if (rocketGroup && !rocket) {
             rocketGroup.quaternion.set(0, 0, 0, 1);
-            rocketGroup.position.set(0, 1000.8, 0);
+            rocketGroup.position.set(0, 1000.4, 0);
         }
         if (flameMesh) flameMesh.visible = false;
         if (velArrow) velArrow.visible = false;
