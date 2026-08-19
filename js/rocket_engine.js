@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 渲染、場景構建與視覺特效
+ * js/rocket_engine.js - 3D 渲染、場景構建與視覺特效 (修復尾焰與分體結構)
  * @license MIT
  */
 
@@ -89,15 +89,17 @@ export function switchRocketMesh(type) {
     activeRocketParts = createRocketMesh(type);
     rocketGroup.add(activeRocketParts.root);
 
-    const flameGeo = new THREE.ConeGeometry(0.5, 5.0, 24);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.95 });
+    // 🔥 修復尾焰幾何體與朝向：頂點在 (0, 0, 0)，向下 (-Y) 延伸
+    const flameGeo = new THREE.ConeGeometry(0.45, 4.0, 24);
+    flameGeo.translate(0, -2.0, 0);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
     flameMesh = new THREE.Mesh(flameGeo, flameMat);
-    flameMesh.position.y = -2.5;
-    flameMesh.rotation.x = Math.PI;
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    const coneGeo = new THREE.ConeGeometry(2.5, 3.5, 32, 1, true);
+    // 💨 音障蒸氣錐
+    const coneGeo = new THREE.ConeGeometry(1.8, 2.5, 32, 1, true);
+    coneGeo.translate(0, -1.25, 0);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
     machConeMesh.position.y = activeRocketParts.nosePosY || 9.0;
@@ -268,14 +270,15 @@ export function spawnDebrisPiece(state, mesh, relVel) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
-    debrisGroup.position.copy(state.r.clone().multiplyScalar(WORLD_SCALE));
+    debrisGroup.position.copy(state.r.clone().normalize().multiplyScalar(1000 + ((state.r.length() - R_EARTH) * 0.035)));
+    debrisGroup.quaternion.copy(rocketGroup.quaternion);
     scene.add(debrisGroup);
 
     debrisList.push({
         r: state.r.clone(),
         v: state.v.clone().add(relVel),
         mesh: debrisGroup,
-        life: 180
+        life: 120
     });
 }
 
@@ -288,8 +291,10 @@ export function updateDebris(dt) {
         d.v.add(grav.multiplyScalar(dt));
         d.r.add(d.v.clone().multiplyScalar(dt));
         
-        d.mesh.position.copy(d.r.clone().multiplyScalar(WORLD_SCALE));
-        d.mesh.rotation.x += dt * 0.4;
+        const alt = Math.max(0, d.r.length() - R_EARTH);
+        const visualPos = d.r.clone().normalize().multiplyScalar(1000 + (alt * 0.035));
+        d.mesh.position.copy(visualPos);
+        d.mesh.rotation.x += dt * 0.5;
         d.mesh.rotation.z += dt * 0.3;
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
@@ -302,29 +307,28 @@ export function updateDebris(dt) {
 export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
     if (exhaustParticles.length > 250) return;
     
-    const count = isLowAltitude ? 6 : 3;
-    const spread = isLowAltitude ? 3.5 : 1.0;
-    const upwardBias = isLowAltitude ? 0.5 : 1.8;
-    const windDir = new THREE.Vector3(0.3, 0, -0.2).normalize();
+    const count = isLowAltitude ? 5 : 2;
+    const spread = isLowAltitude ? 2.0 : 0.8;
+    const windDir = new THREE.Vector3(0.2, 0, -0.1).normalize();
 
     for (let i = 0; i < count; i++) {
-        const isFire = Math.random() < 0.4;
-        const size = isLowAltitude ? (0.3 + Math.random() * 0.45) : (0.15 + Math.random() * 0.2);
+        const isFire = Math.random() < 0.5;
+        const size = isLowAltitude ? (0.25 + Math.random() * 0.35) : (0.12 + Math.random() * 0.18);
         const p = new THREE.Mesh(
             new THREE.SphereGeometry(size, 6, 6),
-            new THREE.MeshBasicMaterial({ color: isFire ? (Math.random() > 0.5 ? 0xff5500 : 0xffbb00) : 0xe2e8f0, transparent: true, opacity: 0.9 })
+            new THREE.MeshBasicMaterial({ color: isFire ? 0xff6600 : 0xcccccc, transparent: true, opacity: 0.85 })
         );
 
-        p.position.set(pos.x + (Math.random() - 0.5) * 0.4, pos.y - 0.5, pos.z + (Math.random() - 0.5) * 0.4);
+        p.position.set(pos.x + (Math.random() - 0.5) * 0.3, pos.y - 0.5, pos.z + (Math.random() - 0.5) * 0.3);
         scene.add(p);
 
         exhaustParticles.push({
             mesh: p,
-            vx: (Math.random() - 0.5) * spread + windDir.x * 1.2,
-            vy: -(5 + Math.random() * 6) * power * upwardBias,
-            vz: (Math.random() - 0.5) * spread + windDir.z * 1.2,
-            expansion: isLowAltitude ? 1.06 : 1.03,
-            life: 1.0
+            vx: (Math.random() - 0.5) * spread + windDir.x * 0.8,
+            vy: -(4 + Math.random() * 5) * power,
+            vz: (Math.random() - 0.5) * spread + windDir.z * 0.8,
+            expansion: 1.04,
+            life: 0.8
         });
     }
 }
@@ -334,8 +338,8 @@ export function updateExhaustParticles(dt) {
         const p = exhaustParticles[i];
         p.mesh.position.add(new THREE.Vector3(p.vx, p.vy, p.vz).multiplyScalar(dt));
         p.mesh.scale.multiplyScalar(p.expansion);
-        p.life -= dt * 1.8;
-        p.mesh.material.opacity = Math.max(0, p.life * 0.8);
+        p.life -= dt * 2.0;
+        p.mesh.material.opacity = Math.max(0, p.life);
         if (p.life <= 0) {
             scene.remove(p.mesh);
             exhaustParticles.splice(i, 1);
