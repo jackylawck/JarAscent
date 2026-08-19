@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 渲染與特效協調器
+ * js/rocket_engine.js - 3D 渲染、特效與太空漸變系統
  * @license MIT
  */
 
@@ -15,6 +15,7 @@ export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLig
 export let velArrow, thrustArrow;
 export let debrisList = [];
 export let explosionParticles = [];
+export let starFieldMesh = null; // 控制星空透明度
 
 export { ROCKET_MODELS };
 
@@ -22,25 +23,16 @@ function createEarthTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 2048; canvas.height = 1024;
     const ctx = canvas.getContext('2d');
-    
     const oceanGrad = ctx.createLinearGradient(0, 0, 0, 1024);
-    oceanGrad.addColorStop(0, '#0a2342');
-    oceanGrad.addColorStop(0.5, '#021024');
-    oceanGrad.addColorStop(1, '#0a2342');
-    ctx.fillStyle = oceanGrad;
-    ctx.fillRect(0, 0, 2048, 1024);
-    
+    oceanGrad.addColorStop(0, '#0a2342'); oceanGrad.addColorStop(0.5, '#021024'); oceanGrad.addColorStop(1, '#0a2342');
+    ctx.fillStyle = oceanGrad; ctx.fillRect(0, 0, 2048, 1024);
     ctx.fillStyle = '#1e3d2f';
-    const landContours = [[400, 300, 240, 180], [700, 250, 180, 120], [1300, 400, 320, 220], [1600, 650, 220, 160], [500, 700, 200, 280], [1700, 300, 260, 180]];
-    landContours.forEach(([x, y, rx, ry]) => {
+    [[400, 300, 240, 180], [700, 250, 180, 120], [1300, 400, 320, 220], [1600, 650, 220, 160], [500, 700, 200, 280], [1700, 300, 260, 180]].forEach(([x, y, rx, ry]) => {
         ctx.beginPath(); ctx.ellipse(x, y, rx, ry, Math.PI/6, 0, Math.PI*2); ctx.fill();
     });
-    
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)'; ctx.lineWidth = 1.5;
     for (let i = 0; i <= 360; i += 30) { ctx.beginPath(); ctx.moveTo((i/360)*2048, 0); ctx.lineTo((i/360)*2048, 1024); ctx.stroke(); }
     for (let i = 0; i <= 180; i += 30) { ctx.beginPath(); ctx.moveTo(0, (i/180)*1024); ctx.lineTo(2048, (i/180)*1024); ctx.stroke(); }
-    
     return new THREE.CanvasTexture(canvas);
 }
 
@@ -57,23 +49,26 @@ function createStarField() {
         starPos[i+2] = rad * Math.cos(phi);
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    return new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 16, transparent: true, opacity: 0.9 }));
+    starFieldMesh = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 16, transparent: true, opacity: 0.0 }));
+    return starFieldMesh;
 }
 
-export function setEnvironmentMode(mode) {
+// 🌌 天空到宇宙的無縫過渡
+export function updateEnvironmentVisuals(alt) {
     if (!scene) return;
-    if (mode === 'DAY') {
-        scene.background = new THREE.Color(0x38bdf8);
-        scene.fog.color = new THREE.Color(0xbae6fd);
-        scene.fog.density = 0.0003;
-        if (sunLight) { sunLight.color.setHex(0xffffff); sunLight.intensity = 2.8; }
-        if (hemiLight) { hemiLight.color.setHex(0xe0f2fe); hemiLight.groundColor.setHex(0x334155); hemiLight.intensity = 1.2; }
-    } else {
-        scene.background = new THREE.Color(0x020617);
-        scene.fog.color = new THREE.Color(0x020617);
-        scene.fog.density = 0.0001;
-        if (sunLight) { sunLight.color.setHex(0xffedd5); sunLight.intensity = 1.8; }
-        if (hemiLight) { hemiLight.color.setHex(0x1e293b); hemiLight.groundColor.setHex(0x020617); hemiLight.intensity = 0.6; }
+    const ratio = Math.min(1.0, Math.max(0.0, alt / 80000)); // 80km完全進入太空黑
+    
+    // 顏色過渡
+    const skyColor = new THREE.Color(0x38bdf8);
+    const spaceColor = new THREE.Color(0x020617);
+    scene.background = skyColor.clone().lerp(spaceColor, ratio);
+    
+    // 霧氣消散
+    scene.fog.density = 0.0003 * (1.0 - ratio);
+    
+    // 星空浮現
+    if (starFieldMesh) {
+        starFieldMesh.material.opacity = ratio * 0.9;
     }
 }
 
@@ -94,10 +89,11 @@ export function switchRocketMesh(type) {
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    const coneGeo = new THREE.ConeGeometry(1.6, 2.2, 32, 1, true);
+    // 🌪️ 修復：馬赫錐變寬、位置往上移避開箭體、改用半透明加法混合
+    const coneGeo = new THREE.ConeGeometry(2.5, 3.5, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
-    machConeMesh.position.y = 7.0;
+    machConeMesh.position.y = activeRocketParts.nosePosY || 9.0;
     rocketGroup.add(machConeMesh);
 
     rocketGroup.quaternion.set(0, 0, 0, 1);
