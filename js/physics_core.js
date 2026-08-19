@@ -155,7 +155,6 @@ export function computeDerivatives(state) {
 
     state.currentGForce = (thrustAcc.length() / 9.80665) + (state.isLaunched ? 0 : 1.0);
 
-    // WGS-84 大氣共轉相對風場計算
     let dragAcc = new THREE.Vector3(0,0,0);
     const alt = rMag - R_EARTH;
     if (alt < 100000 && state.isLaunched && mass > 0) {
