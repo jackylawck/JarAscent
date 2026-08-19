@@ -72,7 +72,7 @@ export function createRocketMesh(type) {
     group.add(fairing);
     group.add(nose);
 
-    // 6. 逃逸塔 (修復：精確貼合鼻錐頂部)
+    // 6. 逃逸塔 (修復：精確貼合鼻錐頂端)
     const escapeTower = new THREE.Group();
     if (config.hasTower) {
         const topY = nosePosY + noseHeight / 2;
