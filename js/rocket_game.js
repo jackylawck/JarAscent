@@ -1,16 +1,15 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務控制台與 UI 交互
+ * js/rocket_game.js - JarAscent 3D 任務主控、倒數儀式與動態視角調度
  * @license MIT
  */
 
-// 直接使用全域 window.THREE
 const THREE = window.THREE;
 
 import { 
     initRocketScene, RocketState, rk4Step, executeGuidance, getOrbitalElements,
     getMoonPosition, scene, camera, controls, renderer, rocketGroup, 
     earthMesh, moonMesh, velArrow, thrustArrow, spawnExhaustParticles, updateExhaustParticles,
-    ENGINE_DATABASE
+    ENGINE_DATABASE, R_EARTH
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -19,6 +18,11 @@ let lastTime = performance.now();
 let timeScale = 1.0;
 let orbitLine = null;
 const ORBIT_SEGMENTS = 128;
+
+// 倒數與發射狀態機
+let countdownTime = 10;
+let isCountingDown = false;
+let cameraShake = 0;
 
 const I18N = {
     zh: {
@@ -30,12 +34,13 @@ const I18N = {
         lblEngine: "火箭發動機型號:",
         lblPayload: "載荷艙重量 (kg):",
         lblThrottle: "節流閥推力 (%):",
-        launchBtn: "🔥 點火發射 (Launch T-0)",
+        launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)",
         stageBtn: "⚡ 手動一級分離 (Stage Separation)",
         resetBtn: "🔄 重設發射台 (Reset Pad)",
         telemetryTitle: "⚙️ 實時遙測數據 (240Hz RK4 航天算力)",
-        ready: "準備就緒，請點擊點火發射...",
-        liftoff: "🔥 點火升空！Gravity Turn 閉環啟動",
+        ready: "發射台準備就緒，請開始發射程序...",
+        counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...",
+        liftoff: "🔥 點火升空！Liftoff！Gravity Turn 閉環啟動",
         meco: "⚠️ 一級主發動機關機 (MECO)，請手動分離！",
         orbitSuccess: "🏆【軌道達成】成功注入 300km 近地軌道 (SECO)！",
         engines: {
@@ -59,12 +64,13 @@ const I18N = {
         lblEngine: "Rocket Engine Model:",
         lblPayload: "Payload Mass (kg):",
         lblThrottle: "Engine Throttle (%):",
-        launchBtn: "🔥 Launch (T-0 Ignition)",
+        launchBtn: "🔥 Initiate T-10s Terminal Countdown",
         stageBtn: "⚡ Stage Separation",
         resetBtn: "🔄 Reset Launch Pad",
         telemetryTitle: "⚙️ Live Telemetry (240Hz RK4 Precision)",
-        ready: "Pad ready. Awaiting T-0 ignition...",
-        liftoff: "🔥 Liftoff! Closed-loop Gravity Turn active.",
+        ready: "Pad ready. Awaiting launch sequence...",
+        counting: "⚠️ Terminal countdown sequence in progress...",
+        liftoff: "🔥 Main Engine Ignition! Liftoff! Gravity Turn active.",
         meco: "⚠️ Main Engine Cutoff (MECO). Ready for separation!",
         orbitSuccess: "🏆【Orbit Inserted】300km Target Orbit Achieved (SECO)!",
         engines: {
@@ -113,7 +119,7 @@ function initOrbitLine() {
     const positions = new Float32Array((ORBIT_SEGMENTS + 1) * 3);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    orbitLine = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75, linewidth: 2 }));
+    orbitLine = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8, linewidth: 2 }));
     orbitLine.visible = false;
     scene.add(orbitLine);
 }
@@ -121,21 +127,21 @@ function initOrbitLine() {
 function updatePredictedOrbit(state) {
     if (!orbitLine) initOrbitLine();
     const orbit = getOrbitalElements(state);
-    if (!orbit.isOrbital || orbit.semiMajorAxis < 6378137 * 1.05) { orbitLine.visible = false; return; }
+    if (!orbit.isOrbital || orbit.semiMajorAxis < 6378137 * 1.02) { orbitLine.visible = false; return; }
     
     const h = new THREE.Vector3().crossVectors(state.r, state.v);
     if (h.lengthSq() < 1e-12) { orbitLine.visible = false; return; }
     const hUnit = h.normalize();
     
     let refVec = new THREE.Vector3(1,0,0);
-    if (Math.abs(hUnit.dot(refVec)) > 0.99) refVec.set(0,0,1);
+    if (Math.abs(hUnit.dot(refVec)) > 0.99) refVec.set(0,1,0);
     const pUnit = new THREE.Vector3().crossVectors(hUnit, refVec).normalize();
     const qUnit = new THREE.Vector3().crossVectors(hUnit, pUnit).normalize();
     
     const p = orbit.semiMajorAxis * (1 - orbit.eccentricity * orbit.eccentricity);
     const positions = orbitLine.geometry.attributes.position.array;
-    for (let i=0; i<=ORBIT_SEGMENTS; i++) {
-        const theta = (i/ORBIT_SEGMENTS) * Math.PI * 2;
+    for (let i = 0; i <= ORBIT_SEGMENTS; i++) {
+        const theta = (i / ORBIT_SEGMENTS) * Math.PI * 2;
         const radius = p / (1 + orbit.eccentricity * Math.cos(theta));
         const pt = new THREE.Vector3().addScaledVector(pUnit, radius * Math.cos(theta)).addScaledVector(qUnit, radius * Math.sin(theta));
         positions[i*3] = pt.x; positions[i*3+1] = pt.y; positions[i*3+2] = pt.z;
@@ -146,7 +152,7 @@ function updatePredictedOrbit(state) {
 
 function updateTelemetryValues() {
     if (!rocket) return;
-    const alt = rocket.r.length() - 6378137;
+    const alt = Math.max(0, rocket.r.length() - R_EARTH);
     const speed = rocket.v.length();
     const orbit = getOrbitalElements(rocket);
     const fuelPct = (rocket.stage === 1) 
@@ -175,34 +181,60 @@ function updateTelemetryValues() {
     if (rocket.missionAccomplished) updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
 }
 
-function bindUI() {
-    const launchBtn = document.getElementById('btn-launch');
-    const stageBtn = document.getElementById('btn-stage');
+function startCountdownSequence() {
+    if (isCountingDown) return;
+    isCountingDown = true;
+    countdownTime = 10;
     
-    launchBtn.onclick = () => {
-        let engKey = document.getElementById('sel-engine').value;
-        if (!ENGINE_DATABASE[engKey]) engKey = "MERLIN";
-        
-        let payload = parseInt(document.getElementById('sel-payload').value, 10);
-        if (isNaN(payload) || payload < 0 || payload > 50000) payload = 2000;
+    const hud = document.getElementById('countdown-hud');
+    const timerText = document.getElementById('countdown-timer');
+    const launchBtn = document.getElementById('btn-launch');
+    hud.style.display = 'flex';
+    launchBtn.disabled = true;
+    updateStatus(I18N[currentLang].counting, "#fbbf24");
 
-        let throttle = parseInt(document.getElementById('rng-throttle').value, 10);
-        if (isNaN(throttle) || throttle < 10 || throttle > 100) throttle = 100;
+    const timerInterval = setInterval(() => {
+        countdownTime--;
+        timerText.innerText = `T-${countdownTime}`;
+        if (countdownTime <= 3) {
+            timerText.style.color = '#ef4444'; // 最後3秒點火警示紅
+        }
+        if (countdownTime <= 0) {
+            clearInterval(timerInterval);
+            hud.style.display = 'none';
+            launchBtn.style.display = 'none';
+            executeLiftoff();
+        }
+    }, 1000);
+}
 
-        rocket = new RocketState();
-        rocket.initEngine(engKey, payload);
-        rocket.throttle = throttle / 100;
-        rocket.isLaunched = true;
-        rocket.guidanceActive = true;
-        
-        launchBtn.style.display = 'none';
-        updateStatus(I18N[currentLang].liftoff, "#38bdf8");
-    };
+function executeLiftoff() {
+    let engKey = document.getElementById('sel-engine').value;
+    if (!ENGINE_DATABASE[engKey]) engKey = "MERLIN";
+    
+    let payload = parseInt(document.getElementById('sel-payload').value, 10);
+    if (isNaN(payload) || payload < 0 || payload > 50000) payload = 2000;
 
-    stageBtn.onclick = () => { 
+    let throttle = parseInt(document.getElementById('rng-throttle').value, 10);
+    if (isNaN(throttle) || throttle < 10 || throttle > 100) throttle = 100;
+
+    rocket = new RocketState();
+    rocket.initEngine(engKey, payload);
+    rocket.throttle = throttle / 100;
+    rocket.isLaunched = true;
+    rocket.guidanceActive = true;
+    
+    cameraShake = 1.5; // 觸發起飛鏡頭震撼
+    updateStatus(I18N[currentLang].liftoff, "#38bdf8");
+}
+
+function bindUI() {
+    document.getElementById('btn-launch').onclick = startCountdownSequence;
+    
+    document.getElementById('btn-stage').onclick = () => { 
         if (rocket && rocket.stage === 1) { 
             rocket.stage = 2; 
-            stageBtn.style.display = 'none'; 
+            document.getElementById('btn-stage').style.display = 'none'; 
         } 
     };
 
@@ -234,12 +266,12 @@ function gameLoop(now) {
     lastTime = now;
 
     if (moonMesh) moonMesh.position.copy(getMoonPosition(performance.now() / 1000));
-    if (earthMesh) earthMesh.rotation.y += dt * 0.05 * timeScale;
+    if (earthMesh) earthMesh.rotation.y += dt * 0.02 * timeScale;
 
     if (rocket && rocket.isLaunched) {
         executeGuidance(rocket, dt);
 
-        const maxSubDt = (rocket.r.length() - 6378137 < 100000 && rocket.getThrustVector().length() > 0) ? 0.005 : 0.05;
+        const maxSubDt = (rocket.r.length() - R_EARTH < 100000 && rocket.getThrustVector().length() > 0) ? 0.005 : 0.05;
         let remainingDt = dt * timeScale;
         while (remainingDt > 0) {
             const stepDt = Math.min(remainingDt, maxSubDt);
@@ -247,22 +279,47 @@ function gameLoop(now) {
             remainingDt -= stepDt;
         }
 
-        rocketGroup.position.copy(rocket.r);
-        rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), rocket.thrustDir.clone().normalize());
+        // 🚀 動態視覺縮放 (Dynamic Scale)：在太空軌道中將火箭模型適度放大，確保清晰可見
+        const alt = Math.max(0, rocket.r.length() - R_EARTH);
+        const visualScale = (alt < 5000) ? 1.0 : Math.min(200.0, 1.0 + (alt / 10000) * 1.5);
+        rocketGroup.scale.set(visualScale, visualScale, visualScale);
 
+        rocketGroup.position.copy(rocket.r);
+        
+        // 火箭姿態朝向推力方向 (+X 為基準對齊)
+        const thrustDir = rocket.thrustDir.clone().normalize();
+        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
+        rocketGroup.quaternion.copy(quat);
+
+        // 動態智慧相機跟隨
         const orbit = getOrbitalElements(rocket);
-        let camDist = Math.min(300000, Math.max(20000, rocket.r.length() * 0.012));
-        if (orbit.isOrbital) camDist = Math.max(camDist, orbit.semiMajorAxis * 0.015);
-        camera.position.lerp(rocket.r.clone().add(new THREE.Vector3(camDist, camDist*0.3, 0)), 0.05);
-        controls.target.copy(rocket.r);
+        let camOffsetDist = (alt < 2000) 
+            ? 180 + alt * 0.1 
+            : Math.min(250000, Math.max(1000, alt * 0.6));
+            
+        if (orbit.isOrbital) {
+            camOffsetDist = Math.max(camOffsetDist, orbit.semiMajorAxis * 0.008);
+        }
+
+        // 點火震顫效果
+        const shakeX = (Math.random() - 0.5) * cameraShake * 10;
+        const shakeY = (Math.random() - 0.5) * cameraShake * 10;
+        if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.5);
+
+        const idealCamPos = rocket.r.clone().add(new THREE.Vector3(camOffsetDist + shakeX, camOffsetDist * 0.4 + shakeY, camOffsetDist * 0.8));
+        camera.position.lerp(idealCamPos, 0.08);
+        controls.target.lerp(rocket.r, 0.1);
 
         const thrustMag = rocket.getThrustVector().length();
-        if (thrustMag > 1000) spawnExhaustParticles(rocketGroup.position, rocket.throttle);
+        if (thrustMag > 1000) {
+            spawnExhaustParticles(rocketGroup.position, rocket.throttle * visualScale);
+        }
         
-        const scale = Math.min(200000, rocket.r.length() * 0.01);
-        velArrow.position.copy(rocket.r); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(scale);
-        thrustArrow.position.copy(rocket.r); thrustArrow.setDirection(rocket.thrustDir.clone().normalize()); thrustArrow.setLength(scale * 0.6);
-        velArrow.visible = true; thrustArrow.visible = (thrustMag > 0);
+        // 向量箭頭更新 (隨距離動態調整長度，避免遮擋全景)
+        const arrowLen = Math.min(camOffsetDist * 0.4, Math.max(50, alt * 0.05));
+        velArrow.position.copy(rocket.r); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(arrowLen);
+        thrustArrow.position.copy(rocket.r); thrustArrow.setDirection(thrustDir); thrustArrow.setLength(arrowLen * 0.7);
+        velArrow.visible = (alt > 2000); thrustArrow.visible = (alt > 2000 && thrustMag > 0);
 
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
