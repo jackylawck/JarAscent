@@ -6,6 +6,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
+    
+    <!-- ✅ 加入 ICON 支援 -->
+    <link rel="icon" type="image/png" sizes="192x192" href="JarAscenticon-192.png">
+    <link rel="apple-touch-icon" href="JarAscenticon-192.png">
+    
     <title>🚀 躍上穹蒼 3D | JarAscent 3D</title>
     <meta name="theme-color" content="#030712">
 
@@ -14,11 +19,7 @@
         html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
         #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        .ui-overlay { 
-            position: absolute; top: 12px; left: 12px; z-index: 100; max-height: 94vh; overflow-y: auto;
-            transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
-            transform: translateX(0); opacity: 1;
-        }
+        .ui-overlay { position: absolute; top: 12px; left: 12px; z-index: 100; max-height: 94vh; overflow-y: auto; transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; transform: translateX(0); opacity: 1; }
         .ui-overlay.collapsed { transform: translateX(-420px); opacity: 0; pointer-events: none; }
         .ui-card { background: rgba(10, 16, 30, 0.92); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 370px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
         @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 370px; } }
@@ -156,7 +157,6 @@
                     </select>
                 </div>
                 
-                <!-- 🚀 展開 5 大維度工程參數 -->
                 <div id="advanced-config" style="display: none; border-top: 1px dashed rgba(255,255,255,0.2); margin-top: 8px; padding-top: 6px;">
                     <div class="config-sub-section" id="sub-prop">🚀 推進與動力系統</div>
                     <div class="form-row">
