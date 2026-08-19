@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換
+ * js/rocket_game.js - JarAscent 3D 任務主控與雙語切換 (修復升空倒數)
  * @license MIT
  */
 
@@ -220,7 +220,6 @@ function evaluateStructuralLimits(rocket) {
     const dynQkPa = (0.5 * rho * speed * speed) / 1000;
     const visualPos = rocket.r.clone().multiplyScalar(WORLD_SCALE);
 
-    // 💥 1. 發射台推重比過低 (TWR < 1.05) 導致無法離地自爆
     const twr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
     if (rocket.flightTime > 3.0 && alt < 20 && twr < 1.05) {
         rocket.isDestroyed = true;
@@ -231,7 +230,6 @@ function evaluateStructuralLimits(rocket) {
         return;
     }
 
-    // 💥 2. 突破真實大氣相對動壓 Max-Q 極限 (> 55 kPa) 氣動剪切解體
     if (dynQkPa > 55.0 && alt < 20000) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? `相對動壓突破 55 kPa 極限 (${dynQkPa.toFixed(1)} kPa)，箭體氣動解體` : `MAX-Q SHEAR FAILURE: Exceeded 55 kPa relative pressure (${dynQkPa.toFixed(1)} kPa). Hull shredded.`;
@@ -241,7 +239,6 @@ function evaluateStructuralLimits(rocket) {
         return;
     }
 
-    // 💥 3. 過載過大 (> 5.5 G) 結構擠壓解體
     if (rocket.currentGForce > 5.5 && rocket.flightTime > 10) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? `加速度過載超過 5.5 G 極限 (${rocket.currentGForce.toFixed(2)} G)，結構被擠壓破壞` : `G-FORCE OVERLOAD: Exceeded 5.5 G (${rocket.currentGForce.toFixed(2)} G). Hull crushed.`;
@@ -418,33 +415,43 @@ function startCountdownSequence() {
     const hud = document.getElementById('countdown-hud');
     const timerText = document.getElementById('countdown-timer');
     const launchBtn = document.getElementById('btn-launch');
-    hud.style.display = 'flex';
-    launchBtn.disabled = true;
+    if (hud) hud.style.display = 'flex';
+    if (launchBtn) launchBtn.disabled = true;
     updateStatus(I18N[currentLang].counting, "#fbbf24");
 
     const timerInterval = setInterval(() => {
         countdownTime--;
-        timerText.innerText = `T-${countdownTime}`;
-        if (countdownTime <= 3) timerText.style.color = '#ef4444';
+        if (timerText) timerText.innerText = `T-${countdownTime}`;
+        if (countdownTime <= 3 && timerText) timerText.style.color = '#ef4444';
         if (countdownTime <= 0) {
             clearInterval(timerInterval);
-            hud.style.display = 'none';
-            launchBtn.style.display = 'none';
+            if (hud) hud.style.display = 'none';
+            if (launchBtn) launchBtn.style.display = 'none';
             executeLiftoff();
         }
     }, 1000);
 }
 
 function executeLiftoff() {
-    let engKey = document.getElementById('sel-engine').value;
+    const elEngine = document.getElementById('sel-engine');
+    let engKey = elEngine ? elEngine.value : "CZ10A";
     if (!ROCKET_MODELS[engKey]) engKey = "CZ10A";
     
-    let payload = parseInt(document.getElementById('sel-payload').value, 10);
+    const elPayload = document.getElementById('sel-payload');
+    let payload = elPayload ? parseInt(elPayload.value, 10) : 8000;
     if (isNaN(payload)) payload = 8000;
 
-    let fuelFactor = parseInt(document.getElementById('rng-fuel').value, 10) / 100;
-    let turnAltKm = parseInt(document.getElementById('rng-turn').value, 10);
-    let throttle = parseInt(document.getElementById('rng-throttle').value, 10);
+    const elFuel = document.getElementById('rng-fuel');
+    let fuelFactor = elFuel ? parseInt(elFuel.value, 10) / 100 : 1.0;
+    if (isNaN(fuelFactor)) fuelFactor = 1.0;
+
+    const elTurn = document.getElementById('rng-turn');
+    let turnAltKm = elTurn ? parseInt(elTurn.value, 10) : 8;
+    if (isNaN(turnAltKm)) turnAltKm = 8;
+
+    const elThrottle = document.getElementById('rng-throttle');
+    let throttle = elThrottle ? parseInt(elThrottle.value, 10) : 100;
+    if (isNaN(throttle)) throttle = 100;
 
     rocket = new RocketState();
     rocket.fuelFactor = fuelFactor;
@@ -459,56 +466,79 @@ function executeLiftoff() {
     setTimeout(() => {
         if (isUIVisible) {
             isUIVisible = false;
-            document.getElementById('ui-overlay-box').classList.add('collapsed');
+            const box = document.getElementById('ui-overlay-box');
+            if (box) box.classList.add('collapsed');
             setText('btn-toggle-ui', I18N[currentLang].toggleUiHide);
         }
     }, 3000);
 }
 
 function bindUI() {
-    document.getElementById('btn-launch').onclick = startCountdownSequence;
-    document.getElementById('btn-reset').onclick = () => location.reload();
+    const btnLaunch = document.getElementById('btn-launch');
+    if (btnLaunch) btnLaunch.onclick = startCountdownSequence;
     
-    document.getElementById('sel-env').onchange = (e) => {
-        setEnvironmentMode(e.target.value);
-    };
+    const btnReset = document.getElementById('btn-reset');
+    if (btnReset) btnReset.onclick = () => location.reload();
+    
+    const selEnv = document.getElementById('sel-env');
+    if (selEnv) {
+        selEnv.onchange = (e) => {
+            setEnvironmentMode(e.target.value);
+        };
+    }
 
-    document.getElementById('sel-engine').onchange = (e) => {
-        switchRocketMesh(e.target.value);
-    };
+    const selEngine = document.getElementById('sel-engine');
+    if (selEngine) {
+        selEngine.onchange = (e) => {
+            switchRocketMesh(e.target.value);
+        };
+    }
 
-    document.getElementById('rng-throttle').oninput = (e) => { 
-        let val = parseInt(e.target.value, 10);
-        if (!isNaN(val) && rocket && !rocket.missionAccomplished && !rocket.isDestroyed) {
-            rocket.throttle = Math.max(0.1, Math.min(1.0, val / 100));
-        }
-    };
+    const rngThrottle = document.getElementById('rng-throttle');
+    if (rngThrottle) {
+        rngThrottle.oninput = (e) => { 
+            let val = parseInt(e.target.value, 10);
+            if (!isNaN(val) && rocket && !rocket.missionAccomplished && !rocket.isDestroyed) {
+                rocket.throttle = Math.max(0.1, Math.min(1.0, val / 100));
+            }
+        };
+    }
 
-    document.getElementById('btn-lang').onclick = () => { 
-        currentLang = currentLang === 'zh' ? 'en' : 'zh'; 
-        applyLanguageUI(); 
-    };
+    const btnLang = document.getElementById('btn-lang');
+    if (btnLang) {
+        btnLang.onclick = () => { 
+            currentLang = currentLang === 'zh' ? 'en' : 'zh'; 
+            applyLanguageUI(); 
+        };
+    }
 
     const toggleBtn = document.getElementById('btn-toggle-ui');
-    toggleBtn.onclick = () => {
-        isUIVisible = !isUIVisible;
-        const box = document.getElementById('ui-overlay-box');
-        box.classList.toggle('collapsed', !isUIVisible);
-        setText('btn-toggle-ui', isUIVisible ? I18N[currentLang].toggleUi : I18N[currentLang].toggleUiHide);
-    };
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            isUIVisible = !isUIVisible;
+            const box = document.getElementById('ui-overlay-box');
+            if (box) box.classList.toggle('collapsed', !isUIVisible);
+            setText('btn-toggle-ui', isUIVisible ? I18N[currentLang].toggleUi : I18N[currentLang].toggleUiHide);
+        };
+    }
 
     const detailBtn = document.getElementById('btn-toggle-details');
-    detailBtn.onclick = () => {
-        isDetailTelemetryVisible = !isDetailTelemetryVisible;
-        const detailBox = document.getElementById('telemetry-detail-box');
-        detailBox.style.display = isDetailTelemetryVisible ? 'block' : 'none';
-        detailBtn.innerText = isDetailTelemetryVisible ? I18N[currentLang].toggleDetailHide : I18N[currentLang].toggleDetailShow;
-        updateTelemetryValues();
-    };
+    if (detailBtn) {
+        detailBtn.onclick = () => {
+            isDetailTelemetryVisible = !isDetailTelemetryVisible;
+            const detailBox = document.getElementById('telemetry-detail-box');
+            if (detailBox) detailBox.style.display = isDetailTelemetryVisible ? 'block' : 'none';
+            detailBtn.innerText = isDetailTelemetryVisible ? I18N[currentLang].toggleDetailHide : I18N[currentLang].toggleDetailShow;
+            updateTelemetryValues();
+        };
+    }
 
     const updateTimeDisplay = () => setText('time-scale-display', `倍速/Warp: ${timeScale.toFixed(1)}x`);
-    document.getElementById('btn-time-slower').onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); };
-    document.getElementById('btn-time-faster').onclick = () => { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); };
+    const btnSlower = document.getElementById('btn-time-slower');
+    if (btnSlower) btnSlower.onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); };
+    const btnFaster = document.getElementById('btn-time-faster');
+    if (btnFaster) btnFaster.onclick = () => { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); };
+
     window.addEventListener('keydown', (e) => {
         if (e.key === '=' || e.key === '+') { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); }
         if (e.key === '-') { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); }
