@@ -15,14 +15,15 @@
         html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
         #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
         
+        /* 側邊控制台 */
         .ui-overlay { position: absolute; top: 12px; left: 12px; z-index: 100; max-height: 94vh; overflow-y: auto; }
-        .ui-card { background: rgba(10, 16, 30, 0.88); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 350px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
-        @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 350px; } }
+        .ui-card { background: rgba(10, 16, 30, 0.88); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 340px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
+        @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 340px; } }
         
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        h1 { font-size: 1.2rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; margin: 0; }
+        h1 { font-size: 1.15rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; margin: 0; }
         .lang-btn { background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
-        p { font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.3; }
+        p { font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.3; }
         
         .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 10px 12px; font-size: 0.88rem; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s, filter 0.2s; margin-top: 6px; display: block; text-align: center; }
         .btn:hover { filter: brightness(1.1); }
@@ -30,40 +31,110 @@
         .btn-stage { background: linear-gradient(135deg, #06b6d4, #3b82f6); box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4); }
         .btn-reset { background: #1e293b; border: 1px solid rgba(255,255,255,0.2); }
         
-        .status-banner { font-size: 0.85rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
+        .status-banner { font-size: 0.82rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
         .config-panel { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.08); }
-        .config-panel h3 { font-size: 0.82rem; color: #fbbf24; margin-bottom: 6px; }
-        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.75rem; }
+        .config-panel h3 { font-size: 0.8rem; color: #fbbf24; margin-bottom: 6px; }
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.72rem; }
         .form-row label { color: #cbd5e1; }
-        .form-row select, .form-row input[type="range"] { background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 2px 6px; font-size: 0.75rem; width: 55%; }
+        .form-row select, .form-row input[type="range"] { background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; width: 55%; }
         
-        .debug-panel { font-family: 'Courier New', Courier, monospace; font-size: 0.72rem; color: #38bdf8; background: rgba(3, 7, 18, 0.85); padding: 8px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); margin-top: 6px; line-height: 1.35; }
-        .debug-panel h4 { color: #fbbf24; margin-bottom: 4px; font-size: 0.75rem; border-bottom: 1px solid rgba(251, 191, 36, 0.3); padding-bottom: 2px; }
-        .toggle-ui-btn { position: fixed; bottom: 15px; left: 15px; z-index: 200; background: linear-gradient(135deg, #38bdf8, #818cf8); color: #030712; font-weight: 800; border: none; padding: 8px 14px; border-radius: 20px; font-size: 0.78rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.5); }
+        /* 🕹️ [遊戲化頂部 HUD] 全像戰鬥抬頭顯示 */
+        .top-hud-bar {
+            position: absolute; top: 12px; right: 12px; z-index: 100;
+            display: flex; gap: 10px; pointer-events: none;
+        }
+        .hud-metric-box {
+            background: rgba(10, 16, 30, 0.75); backdrop-filter: blur(15px);
+            border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 10px;
+            padding: 6px 14px; text-align: right; min-width: 110px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        .hud-metric-label { font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px; font-weight: bold; }
+        .hud-metric-val {
+            font-family: 'Courier New', Courier, monospace; font-size: 1.4rem;
+            font-weight: 900; color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+        }
         
+        /* 動態氣壓與節流閥進度條 */
+        .hud-gauge-group { margin-top: 6px; }
+        .gauge-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
+        .gauge-bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
+        .fill-q { background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444); }
+        .fill-fuel { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+        
+        /* T-10s 倒數全螢幕 HUD */
         #countdown-hud {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             pointer-events: none; z-index: 150; display: none;
             flex-direction: column; align-items: center; justify-content: center;
-            background: radial-gradient(circle, transparent 40%, rgba(3, 7, 18, 0.7) 90%);
+            background: radial-gradient(circle, transparent 40%, rgba(3, 7, 18, 0.75) 90%);
         }
         #countdown-timer {
-            font-family: 'Courier New', Courier, monospace; font-size: 6rem; font-weight: 900;
+            font-family: 'Courier New', Courier, monospace; font-size: 6.5rem; font-weight: 900;
             color: #fbbf24; text-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(249, 115, 22, 0.5);
         }
         #countdown-subtext {
-            font-size: 1.2rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px;
+            font-size: 1.1rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px;
             text-transform: uppercase; margin-top: 10px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
         }
+        
+        /* 🏆 任務結算簡報室 (Mission Debrief) */
+        #debrief-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(3, 7, 18, 0.85); backdrop-filter: blur(25px);
+            z-index: 200; display: none; align-items: center; justify-content: center;
+        }
+        .debrief-card {
+            background: rgba(15, 23, 42, 0.95); border: 2px solid #38bdf8;
+            border-radius: 20px; padding: 24px; width: 420px; text-align: center;
+            box-shadow: 0 0 50px rgba(56, 189, 248, 0.4);
+        }
+        .debrief-rank { font-size: 4rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 6px 0; }
+        .debrief-stats { text-align: left; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; margin: 12px 0; line-height: 1.6; }
+        
+        .toggle-ui-btn { position: fixed; bottom: 15px; left: 15px; z-index: 120; background: linear-gradient(135deg, #38bdf8, #818cf8); color: #030712; font-weight: 800; border: none; padding: 8px 14px; border-radius: 20px; font-size: 0.78rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.5); }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+    <!-- 頂部大型全像 HUD -->
+    <div class="top-hud-bar">
+        <div class="hud-metric-box">
+            <div class="hud-metric-label">TIME T+</div>
+            <div class="hud-metric-val" id="hud-time">0.0s</div>
+        </div>
+        <div class="hud-metric-box">
+            <div class="hud-metric-label">ALTITUDE</div>
+            <div class="hud-metric-val" id="hud-alt">0.0 km</div>
+        </div>
+        <div class="hud-metric-box">
+            <div class="hud-metric-label">VELOCITY</div>
+            <div class="hud-metric-val" id="hud-vel">0 m/s</div>
+        </div>
+    </div>
+
+    <!-- 倒數 HUD -->
     <div id="countdown-hud">
         <div id="countdown-timer">T-10</div>
         <div id="countdown-subtext">TERMINAL COUNTDOWN SEQUENCE</div>
+    </div>
+
+    <!-- 任務結算簡報室 Modal -->
+    <div id="debrief-modal">
+        <div class="debrief-card">
+            <h2 style="color: #38bdf8; font-size: 1.3rem;">MISSION DEBRIEF // 任務結算</h2>
+            <div class="debrief-rank" id="debrief-rank">S</div>
+            <p id="debrief-title" style="color: #fbbf24; font-weight: bold; font-size: 1rem;">軌道注入大師 (Orbital Ace)</p>
+            <div class="debrief-stats">
+                • 最高地速 (Max Vel): <b id="stat-maxvel">0 m/s</b><br>
+                • 最大動態氣壓 (Max-Q): <b id="stat-maxq">0 kPa</b><br>
+                • 近地點誤差 (Peri Error): <b id="stat-peri-err">0.0 km</b><br>
+                • 剩餘燃料裕度 (Fuel Left): <b id="stat-fuel-left">0%</b>
+            </div>
+            <button class="btn" onclick="location.reload()">🔄 執行下次任務 (Next Mission)</button>
+        </div>
     </div>
 
     <button class="toggle-ui-btn" id="btn-toggle-ui">👁️ 隱藏/顯示控制台</button>
@@ -103,7 +174,7 @@
 
             <div class="status-banner" id="flight-status">發射台準備就緒，請點擊發射...</div>
             <button class="btn" id="btn-launch">🔥 啟動 10 秒倒數發射 (Terminal T-10s)</button>
-            <button class="btn btn-stage" id="btn-stage" style="display:none;">⚡ 手動一級分離 (Stage Separation)</button>
+            <button class="btn btn-stage" id="btn-stage" style="display:none;">⚡ 手動一級分離 (Bullet Time)</button>
             
             <div style="display: flex; gap: 8px; margin: 6px 0; justify-content: center;">
                 <button id="btn-time-slower" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">⏪ 減速</button>
@@ -113,18 +184,24 @@
             
             <button class="btn btn-reset" id="btn-reset">🔄 重設發射台 (Reset Pad)</button>
 
-            <div class="debug-panel" id="physics-debug-box">
-                <h4 id="ui-telemetry-title">⚙️ 實時遙測數據 (240Hz RK4 航天算力)</h4>
+            <!-- 視覺儀表組 -->
+            <div class="hud-gauge-group">
+                <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8;">
+                    <span>動態氣壓 (Dynamic Q)</span><b id="gauge-q-txt" style="color:#38bdf8;">0.0 kPa</b>
+                </div>
+                <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-q" id="gauge-q-bar"></div></div>
+
+                <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8; margin-top:6px;">
+                    <span>推進劑餘量 (Fuel Level)</span><b id="gauge-fuel-txt" style="color:#06b6d4;">100%</b>
+                </div>
+                <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-fuel" id="gauge-fuel-bar" style="width:100%;"></div></div>
+            </div>
+
+            <!-- 次級科研數據面板 -->
+            <div class="debug-panel" id="physics-debug-box" style="margin-top:8px;">
+                <h4 id="ui-telemetry-title">⚙️ 開普勒軌道狀態 (Vis-Viva)</h4>
                 <div id="telemetry-content">
-                    • 飛行時間 T+: <b id="t-time">0.0 s</b><br>
-                    • 海拔高度 Alt: <b id="t-alt">0.0 km</b><br>
-                    • 相對地速 Vel: <b id="t-vel">0.0 m/s</b><br>
-                    • 動態氣壓 Q: <b id="t-q">0.0 kPa</b><br>
-                    • 剩餘燃料 Fuel: <b id="t-fuel">100%</b><br>
-                    • 即時總質量 Mass: <b id="t-mass">0 kg</b><br>
-                    • 推進推力 Thrust: <b id="t-thrust">0 kN</b><br>
-                    • 瞬時比衝 Isp: <b id="t-isp">0 s</b><br>
-                    <hr style="border: 0; border-top: 1px solid rgba(56, 189, 248, 0.3); margin: 4px 0;">
+                    • 總質量 Mass: <b id="t-mass">0 kg</b> | 推力: <b id="t-thrust">0 kN</b><br>
                     • 預測近地點 Peri: <b id="t-peri">0.0 km</b><br>
                     • 預測遠地點 Apo: <b id="t-apo">0.0 km</b><br>
                     • 軌道狀態 Orbit: <b id="t-orbit">次軌道</b><br>
