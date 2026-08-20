@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 航太視景引擎 (包含 VAB 工業區、空間站與動態光影)
+ * js/rocket_engine.js - 航太視景引擎 (修復殘骸旋轉中心、場景重置清理與幾何對齊)
  * @license MIT
  */
 
@@ -90,19 +90,39 @@ export function switchRocketMesh(type) {
     rocketGroup.visible = true;
 }
 
-// 🏗️ 構建發射場工業區 (VAB、低溫儲罐、避雷塔與保障車輛)
+// 🧹 清除所有殘骸、爆炸粒子與排氣
+export function clearAllDebrisAndVFX() {
+    for (let d of debrisList) {
+        if (d.mesh) scene.remove(d.mesh);
+    }
+    debrisList = [];
+
+    for (let ep of explosionParticles) {
+        if (ep.mesh) scene.remove(ep.mesh);
+    }
+    explosionParticles = [];
+
+    for (let p of exhaustParticles) {
+        if (p.mesh) scene.remove(p.mesh);
+    }
+    exhaustParticles = [];
+
+    for (let s of padSteamParticles) {
+        if (s.mesh) scene.remove(s.mesh);
+    }
+    padSteamParticles = [];
+}
+
 function buildSpaceportComplex() {
     launchComplexGroup = new THREE.Group();
     const concMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
     const metalMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7, roughness: 0.3 });
     const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.5, roughness: 0.4 });
 
-    // 主發射台
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.2, 0.8, 32), concMat);
     pad.position.set(0, 999.6, 0);
     launchComplexGroup.add(pad);
 
-    // 紅色發射臍帶塔
     const tower = new THREE.Group();
     const colGeo = new THREE.CylinderGeometry(0.06, 0.06, 12, 8);
     [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]].forEach(([cx, cz]) => {
@@ -119,13 +139,11 @@ function buildSpaceportComplex() {
     tower.position.set(2.0, 1000.0, 0);
     launchComplexGroup.add(tower);
 
-    // 垂直總裝廠房 (VAB Building - 遠處地標)
     const vabMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
     const vab = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 6), vabMat);
     vab.position.set(-18, 1007, -15);
     launchComplexGroup.add(vab);
 
-    // 低溫液氧/液氫球形儲罐 (Cryogenic Spherical Tanks)
     const tankGeo = new THREE.SphereGeometry(1.5, 16, 16);
     [-8, -12].forEach((x, idx) => {
         const tank = new THREE.Mesh(tankGeo, metalMat);
@@ -133,7 +151,6 @@ function buildSpaceportComplex() {
         launchComplexGroup.add(tank);
     });
 
-    // 地面保障特種車輛 (Support Trucks)
     const truckMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
     const truck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 1.6), truckMat);
     truck.position.set(4.5, 1000.25, 4);
@@ -142,25 +159,21 @@ function buildSpaceportComplex() {
     scene.add(launchComplexGroup);
 }
 
-// 🛰️ 構建 400km 軌道目標天宮空間站 (Tiangong Space Station)
 function buildSpaceStation() {
     spaceStationMesh = new THREE.Group();
     const modMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2 });
     const solarMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.9, roughness: 0.1 });
 
-    // 核心艙
     const core = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 3.2, 16), modMat);
     core.rotation.z = Math.PI / 2;
     spaceStationMesh.add(core);
 
-    // 太陽翼 (兩側巨大太陽能電池板)
     [-2.2, 2.2].forEach(x => {
         const wing = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.02, 0.6), solarMat);
         wing.position.set(x, 0, 0);
         spaceStationMesh.add(wing);
     });
 
-    // 部署於 400km 圓軌道 (ECI 坐標系半徑 = 6778 km)
     const rOrbit = (R_EARTH + 400000) * WORLD_SCALE;
     spaceStationMesh.position.set(rOrbit, 0, 0);
     scene.add(spaceStationMesh);
@@ -175,7 +188,7 @@ export function initRocketScene(containerEl) {
     const height = containerEl.clientHeight || window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 50000);
-    camera.position.set(0, 1012, 22);
+    camera.position.set(0, 1008, 24);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
@@ -272,29 +285,40 @@ export function updateExplosion(dt) {
     }
 }
 
+// 🎯 核心修復：幾何質心對齊 + 移除原點偏移旋轉力矩
 export function spawnDebrisPiece(state, mesh, relativeImpulse, aeroProfile = null) {
     if (!mesh) return;
+    
+    // 計算部件幾何中心
+    const bbox = new THREE.Box3().setFromObject(mesh);
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+
     const debrisGroup = new THREE.Group();
-    debrisGroup.add(mesh.clone());
+    const clonedMesh = mesh.clone();
+    
+    // 將克隆網格的中心移回 (0,0,0)，消除圍住轉問題
+    clonedMesh.position.sub(center);
+    debrisGroup.add(clonedMesh);
     scene.add(debrisGroup);
 
     const profile = aeroProfile || { mass: 5000, refArea: 8.0, cd: 0.8, pitchRate: 0.15 };
-    const initialQuat = rocketGroup.quaternion.clone();
-    debrisGroup.quaternion.copy(initialQuat);
-    const massWeightScale = 0.65 + Math.min(1.0, profile.mass / 40000) * 0.7;
+    
+    // 計算該部件在世界空間中的真實位置
+    const worldCenter = center.clone().applyMatrix4(rocketGroup.matrixWorld);
 
     debrisList.push({
-        r: state.r.clone(),
+        r: state.r.clone(), // 物理 ECI 位置
         v: state.v.clone().add(relativeImpulse),
+        worldOffset: worldCenter.clone().sub(rocketGroup.position), // 局部世界位移
         mass: profile.mass,
         refArea: profile.refArea,
         cdBase: profile.cd,
         pitchRate: profile.pitchRate,
         rotAxis: profile.tiltAxis ? profile.tiltAxis.clone().normalize() : new THREE.Vector3(1, 0, 0),
-        quat: initialQuat,
-        massWeightScale: massWeightScale,
+        quat: rocketGroup.quaternion.clone(),
         mesh: debrisGroup,
-        life: 240
+        life: 180
     });
 }
 
@@ -329,12 +353,12 @@ export function updateDebris(dt, currentRocketVisualScale = 1.0) {
         d.v.add(grav.add(drag).multiplyScalar(dt));
         d.r.add(d.v.clone().multiplyScalar(dt));
         
-        const visualPos = d.r.clone().multiplyScalar(WORLD_SCALE);
+        // 絕對 ECI 坐標映射 + 初始質心偏移
+        const visualPos = d.r.clone().multiplyScalar(WORLD_SCALE).add(d.worldOffset);
         d.mesh.position.copy(visualPos);
+        d.mesh.scale.set(currentRocketVisualScale, currentRocketVisualScale, currentRocketVisualScale);
         
-        const effectiveScale = currentRocketVisualScale * d.massWeightScale;
-        d.mesh.scale.set(effectiveScale, effectiveScale, effectiveScale);
-        
+        // 圍繞自身幾何中心平滑微翻滾
         const deltaQuat = new THREE.Quaternion().setFromAxisAngle(d.rotAxis, d.pitchRate * dt);
         d.quat.multiply(deltaQuat);
         d.mesh.quaternion.copy(d.quat);
