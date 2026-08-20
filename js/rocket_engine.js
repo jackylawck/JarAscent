@@ -1,5 +1,6 @@
 /**
- * js/rocket_engine.js - 3D 渲染與真實動態粒子尾焰管線 (純粒子無實體錐)
+ * js/rocket_engine.js - 航太視景引擎 v3.1 Master Edition
+ * (羽流背壓生命週期、質量權重殘骸縮放、發射台熱蒸汽與 ECI 1:1 映射)
  * @license MIT
  */
 
@@ -14,6 +15,7 @@ export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLig
 export let debrisList = [];
 export let explosionParticles = [];
 export let exhaustParticles = [];
+export let padSteamParticles = [];
 export let starFieldMesh = null;
 
 function createEarthTexture() {
@@ -110,7 +112,7 @@ export function initRocketScene(containerEl) {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.minDistance = 2;
-    controls.maxDistance = 20000;
+    controls.maxDistance = 25000;
     controls.target.set(0, 1004, 0);
 
     scene.add(createStarField());
@@ -209,6 +211,7 @@ export function triggerCatastrophicExplosion(pos) {
 export function updateExplosion(dt) {
     for (let i = explosionParticles.length - 1; i >= 0; i--) {
         const ep = explosionParticles[i];
+        ep.vy -= 9.8 * dt; // 重力彈道加速度
         ep.mesh.position.add(new THREE.Vector3(ep.vx, ep.vy, ep.vz).multiplyScalar(dt));
         ep.mesh.scale.multiplyScalar(1.03);
         ep.life -= dt;
@@ -220,98 +223,136 @@ export function updateExplosion(dt) {
     }
 }
 
-// 🌍 真實氣動阻尼分離（不再像風車亂轉）
-export function spawnDebrisPiece(state, mesh, relativeImpulse, pitchTiltAxis = null) {
+// 🔬 殘骸派生：加入質量感知縮放係數 (Mass-Weighted Visual Scale)
+export function spawnDebrisPiece(state, mesh, relativeImpulse, aeroProfile = null) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
     scene.add(debrisGroup);
 
+    const profile = aeroProfile || { mass: 5000, refArea: 8.0, cd: 0.8, pitchRate: 0.15 };
+    const initialQuat = rocketGroup.quaternion.clone();
+    debrisGroup.quaternion.copy(initialQuat);
+
+    // 重型引擎結構視覺上更厚重紮實
+    const massWeightScale = 0.65 + Math.min(1.0, profile.mass / 40000) * 0.7;
+
     debrisList.push({
         r: state.r.clone(),
         v: state.v.clone().add(relativeImpulse),
+        mass: profile.mass,
+        refArea: profile.refArea,
+        cdBase: profile.cd,
+        pitchRate: profile.pitchRate,
+        rotAxis: profile.tiltAxis ? profile.tiltAxis.clone().normalize() : new THREE.Vector3(1, 0, 0),
+        quat: initialQuat,
+        massWeightScale: massWeightScale,
         mesh: debrisGroup,
-        tiltAxis: pitchTiltAxis || new THREE.Vector3(1, 0, 0),
-        tiltAngle: 0,
-        pitchRate: 0.15, // 緩慢仰俯（符合真實氣動翻滾）
-        life: 180
+        life: 240
     });
 }
 
-export function updateDebris(dt) {
+// 🔬 絕對 ECI 坐標映射 + 跨音速波阻峰值
+export function updateDebris(dt, currentRocketVisualScale = 1.0) {
     for (let i = debrisList.length - 1; i >= 0; i--) {
         const d = debrisList[i];
         d.life -= dt;
         
         const rMag = d.r.length();
         const alt = rMag - R_EARTH;
+        const speed = d.v.length();
+        
         const grav = d.r.clone().multiplyScalar(-MU / (rMag * rMag * rMag));
         
-        let drag = new THREE.Vector3(0,0,0);
+        const mach = speed / 340.0;
+        let cd = d.cdBase;
+        if (mach >= 0.8 && mach <= 1.3) {
+            cd *= 2.4; // 跨音速波阻突增
+        } else if (mach > 1.3) {
+            cd *= 0.85;
+        }
+
+        let drag = new THREE.Vector3(0, 0, 0);
         if (alt < 100000 && alt > 0) {
             const rho = 1.225 * Math.exp(-alt / 8500);
-            const speed = d.v.length();
-            if (speed > 1.0) {
-                drag = d.v.clone().normalize().multiplyScalar(-0.5 * rho * speed * speed * 1.2 * 8.0 / 4000.0);
+            if (speed > 0.1) {
+                const dragAcc = (0.5 * rho * speed * speed * cd * d.refArea) / d.mass;
+                drag = d.v.clone().normalize().multiplyScalar(-dragAcc);
             }
         }
         
         d.v.add(grav.add(drag).multiplyScalar(dt));
         d.r.add(d.v.clone().multiplyScalar(dt));
         
-        const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
-        const visualPos = d.r.clone().normalize().multiplyScalar(1000 + visualAlt);
-        
+        const visualPos = d.r.clone().multiplyScalar(WORLD_SCALE);
         d.mesh.position.copy(visualPos);
         
-        // 平緩真實翻滾
-        d.tiltAngle += d.pitchRate * dt;
-        d.mesh.quaternion.copy(rocketGroup.quaternion);
-        d.mesh.rotateOnAxis(d.tiltAxis, d.tiltAngle);
+        const effectiveScale = currentRocketVisualScale * d.massWeightScale;
+        d.mesh.scale.set(effectiveScale, effectiveScale, effectiveScale);
+        
+        const deltaQuat = new THREE.Quaternion().setFromAxisAngle(d.rotAxis, d.pitchRate * dt);
+        d.quat.multiply(deltaQuat);
+        d.mesh.quaternion.copy(d.quat);
 
-        if (d.life <= 0 || d.r.length() < R_EARTH) {
+        if (d.life <= 0 || alt <= 0) {
             scene.remove(d.mesh);
             debrisList.splice(i, 1);
         }
     }
 }
 
-// 🚀 動態真實發射尾焰（一級橘紅烈焰 / 二級深藍真空羽流）
-export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2 = false, isHighAlt = false) {
-    if (exhaustParticles.length > 300) return;
+// 🔬 動態羽流：熱輻射光譜演變 + 氣壓背壓生命週期脫鉤
+export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2 = false, currentAlt = 0) {
+    if (exhaustParticles.length > 350) return;
+    
+    const rho = 1.225 * Math.exp(-currentAlt / 8500);
+    const pressureRatio = Math.max(0.0, Math.min(1.0, rho / 1.225));
+    
+    const plumeSpread = isStage2 
+        ? (0.8 + (1.0 - pressureRatio) * 1.8) 
+        : (0.35 + (1.0 - pressureRatio) * 1.2);
     
     const count = isStage2 ? 4 : 8;
-    const spread = isHighAlt ? 1.6 : 0.5;
-    const baseSpeed = isStage2 ? 14 : 22;
+    const baseSpeed = isStage2 ? 16 : 24;
+
+    const altRatio = Math.min(1.0, currentAlt / 45000);
+    const seaLevelColor = new THREE.Color(0xff5500);
+    const vacuumColor = isStage2 ? new THREE.Color(0x38bdf8) : new THREE.Color(0x818cf8);
+    const currentSpectrumColor = seaLevelColor.clone().lerp(vacuumColor, isStage2 ? 0.9 : altRatio * 0.75);
+
+    // 🔬 生命週期脫鉤：稀薄高空散熱慢，粒子殘留時間加倍
+    const baseLife = isStage2 ? 0.45 : 0.70;
+    const dynamicLife = baseLife * (0.6 + (1.0 - pressureRatio) * 0.9);
 
     for (let i = 0; i < count; i++) {
-        let colorHex = isStage2 
-            ? (Math.random() > 0.4 ? 0x38bdf8 : 0x818cf8) 
-            : (Math.random() > 0.3 ? 0xff5500 : (Math.random() > 0.5 ? 0xfbbf24 : 0xffffff));
-
         const size = (isStage2 ? 0.22 : 0.38) + Math.random() * 0.25;
         const p = new THREE.Mesh(
             new THREE.SphereGeometry(size, 6, 6),
-            new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 })
+            new THREE.MeshBasicMaterial({ 
+                color: currentSpectrumColor.clone().offsetHSL((Math.random() - 0.5) * 0.05, 0, (Math.random() - 0.5) * 0.1),
+                transparent: true, 
+                opacity: 0.9 
+            })
         );
 
         p.position.copy(nozzleWorldPos).add(new THREE.Vector3(
-            (Math.random() - 0.5) * 0.25,
-            (Math.random() - 0.5) * 0.25,
-            (Math.random() - 0.5) * 0.25
+            (Math.random() - 0.5) * 0.15,
+            (Math.random() - 0.5) * 0.15,
+            (Math.random() - 0.5) * 0.15
         ));
         scene.add(p);
 
         const ejectDir = thrustDir.clone().negate();
-        ejectDir.x += (Math.random() - 0.5) * spread;
-        ejectDir.z += (Math.random() - 0.5) * spread;
+        ejectDir.x += (Math.random() - 0.5) * plumeSpread;
+        ejectDir.z += (Math.random() - 0.5) * plumeSpread;
         ejectDir.normalize();
 
         exhaustParticles.push({
             mesh: p,
             vel: ejectDir.multiplyScalar(baseSpeed * power),
-            expansion: isHighAlt ? 1.08 : 1.03,
-            life: isStage2 ? 0.4 : 0.7
+            expansion: 1.01 + (1.0 - pressureRatio) * 0.12,
+            life: dynamicLife,
+            maxLife: dynamicLife
         });
     }
 }
@@ -321,11 +362,51 @@ export function updateExhaustParticles(dt) {
         const p = exhaustParticles[i];
         p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
         p.mesh.scale.multiplyScalar(p.expansion);
-        p.life -= dt * 2.2;
-        p.mesh.material.opacity = Math.max(0, p.life);
+        p.life -= dt * 2.0;
+        p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
         if (p.life <= 0) {
             scene.remove(p.mesh);
             exhaustParticles.splice(i, 1);
+        }
+    }
+}
+
+// 🔬 發射台水噴淋降噪殘留蒸汽 (Pad Steam Effusion)
+export function spawnPadSteam() {
+    if (padSteamParticles.length > 80) return;
+    for (let i = 0; i < 2; i++) {
+        const size = 0.4 + Math.random() * 0.8;
+        const p = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xf1f5f9, transparent: true, opacity: 0.35 })
+        );
+        p.position.set(
+            (Math.random() - 0.5) * 3.5,
+            1000.4 + 0.3 + Math.random() * 0.4,
+            (Math.random() - 0.5) * 3.5
+        );
+        scene.add(p);
+
+        padSteamParticles.push({
+            mesh: p,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: 0.8 + Math.random() * 1.2,
+            vz: (Math.random() - 0.5) * 1.5,
+            life: 2.2
+        });
+    }
+}
+
+export function updatePadSteam(dt) {
+    for (let i = padSteamParticles.length - 1; i >= 0; i--) {
+        const s = padSteamParticles[i];
+        s.mesh.position.add(new THREE.Vector3(s.vx, s.vy, s.vz).multiplyScalar(dt));
+        s.mesh.scale.multiplyScalar(1.04);
+        s.life -= dt;
+        s.mesh.material.opacity = Math.max(0, (s.life / 2.2) * 0.35);
+        if (s.life <= 0) {
+            scene.remove(s.mesh);
+            padSteamParticles.splice(i, 1);
         }
     }
 }
