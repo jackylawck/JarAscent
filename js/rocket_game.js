@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控與姿態制導
+ * js/rocket_game.js - JarAscent 3D 任務主控 (整合 Web Audio 程序化航天音效 + 語音廣播)
  * @license MIT
  */
 
@@ -23,6 +23,8 @@ import {
 let rocket = null;
 let currentLang = 'zh';
 let isAdvancedMode = false;
+let customRocketStats = null;
+
 let lastTime = performance.now();
 let timeScale = 1.0;
 let orbitLine = null;
@@ -42,12 +44,151 @@ let targetLookAt = new THREE.Vector3();
 
 let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: false, orbit: false };
 
+// ==================== 🔊 WEB AUDIO 程序化航天音效系統 ====================
+let audioCtx = null;
+let rocketRumbleNode = null;
+let rocketGainNode = null;
+
+function initAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+// 1. 倒數警報短嗶聲
+function playBeepSound(freq = 880, duration = 0.1) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+// 2. 啟動持續火箭低頻咆哮引擎聲 (Brownian Noise Generator)
+function startRocketRumble() {
+    if (!audioCtx || rocketRumbleNode) return;
+
+    const bufferSize = audioCtx.sampleRate * 2;
+    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        output[i] = (lastOut + (0.02 * white)) / 1.02;
+        lastOut = output[i];
+        output[i] *= 3.5;
+    }
+
+    rocketRumbleNode = audioCtx.createBufferSource();
+    rocketRumbleNode.buffer = noiseBuffer;
+    rocketRumbleNode.loop = true;
+
+    // 低通濾波器模擬深沉引擎咆哮
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(180, audioCtx.currentTime);
+
+    rocketGainNode = audioCtx.createGain();
+    rocketGainNode.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    rocketGainNode.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 1.5);
+
+    rocketRumbleNode.connect(filter);
+    filter.connect(rocketGainNode);
+    rocketGainNode.connect(audioCtx.destination);
+    rocketRumbleNode.start();
+}
+
+function updateRocketRumble(alt, thrustRatio) {
+    if (!rocketGainNode || !audioCtx) return;
+    // 隨高度上升出大氣層（>80km），太空中聲音逐漸衰減變靜
+    const atmoRatio = Math.max(0, 1.0 - (alt / 80000));
+    const targetGain = thrustRatio * atmoRatio * 0.45;
+    rocketGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+}
+
+function stopRocketRumble() {
+    if (rocketGainNode && audioCtx) {
+        rocketGainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        setTimeout(() => {
+            if (rocketRumbleNode) {
+                try { rocketRumbleNode.stop(); } catch(e){}
+                rocketRumbleNode = null;
+            }
+        }, 500);
+    }
+}
+
+// 3. 爆炸螺栓部件分離清脆爆破聲
+function playStagingSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+}
+
+// 4. 災難性爆炸解體巨響 (Crash Boom)
+function playExplosionSound() {
+    if (!audioCtx) return;
+    const bufferSize = audioCtx.sampleRate * 1.5;
+    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.3));
+    }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(260, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 1.2);
+
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.9, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    noise.start();
+}
+
+// ==================== 🎙️ 語音合成廣播引擎 ====================
+function speakMissionCallout(text, lang = currentLang) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.1;
+    utterance.pitch = 1.0;
+    utterance.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+    window.speechSynthesis.speak(utterance);
+}
+
 const I18N = {
     zh: {
-        title: "🚀 躍上穹蒼 3D", subtitle: "航太動力學、真實多級分離與結構極限沙盒", langBtn: "English",
+        title: "🚀 躍上穹蒼 3D", subtitle: "航太動力學、多級分離與 3D 打印沙盒", langBtn: "English",
         toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
         toggleDetailShow: "📊 展開深度科研", toggleDetailHide: "📉 收起深度科研",
         modeSimple: "🟢 簡易模式 (必定成功)", modeAdvanced: "🔴 進階模式 (硬核物理)",
+        stlDrop: "🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)",
         configTitle: "🛠️ 基礎發射設定", lblEnv: "發射場天色:", lblEngine: "火箭型號:",
         subProp: "🚀 推進與動力系統", lblPayload: "任務載荷艙:", lblFuel: "一級燃料加注 (%):", lblThrottle: "節流閥推力 (%):", lblOfRatio: "氧化劑/燃料混合比:",
         subGnc: "🧭 導航制導與控制 (GNC)", lblTurn: "轉向起始高度 (km):", lblTvc: "TVC 噴嘴響應靈敏度:",
@@ -67,13 +208,29 @@ const I18N = {
         lblStatStatus: "任務狀態", lblStatMaxvel: "最高速度", lblStatMaxq: "最大動態氣壓", lblStatPeri: "近地點誤差", lblStatOrbit: "最終軌道", lblStatFuel: "剩餘燃料裕度",
         envOptions: { DAY: "☀️ 白天發射 (Day Launch)", NIGHT: "🌙 夜間發射 (Night Launch)" },
         payloadOptions: { "8000": "新一代載人飛船 (8,000 kg)", "15000": "空間站核心艙 (15,000 kg)", "35000": "重型補給艙 (35,000 kg)", "60000": "極限超重載荷 (60,000 kg) ⚠️" },
-        milestones: { escape: "🚀 T+20s 拋掉逃逸塔 (Tower Jettison)!", boosters: "⚡ T+45s 一級/助推器分離 (Stage 1 Sep)!", fairing: "✨ T+60s 拋整流罩 (Fairing Sep)!", stage2: "🛰️ T+110s 二級熄火，入軌成功 (SECO)!", orbit: "🏆 太陽翼展開，入軌圓滿成功!" }
+        milestones: { 
+            escape: "🚀 T+20s 拋掉逃逸塔 (Tower Jettison)!", 
+            boosters: "⚡ T+45s 一級/助推器分離 (Stage 1 Sep)!", 
+            fairing: "✨ T+60s 拋整流罩 (Fairing Sep)!", 
+            stage2: "🛰️ T+110s 二級熄火，入軌成功 (SECO)!", 
+            orbit: "🏆 太陽翼展開，入軌圓滿成功!" 
+        },
+        speech: {
+            numbers: ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"],
+            ignition: "點火，起飛！",
+            escape: "逃逸塔分離！",
+            boosters: "一級分離！",
+            fairing: "整流罩分離！",
+            orbit: "入軌圓滿成功！太陽翼展開！",
+            abort: "警告，結構異常，任務中止！"
+        }
     },
     en: {
-        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & Custom Staging Sandbox", langBtn: "中文 (繁體)",
+        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & 3D Print STL Sandbox", langBtn: "中文 (繁體)",
         toggleUi: "📋 Mission Control Panel", toggleUiHide: "📋 Expand Panel",
         toggleDetailShow: "📊 Expand Diagnostics", toggleDetailHide: "📉 Collapse Diagnostics",
         modeSimple: "🟢 Simple Mode (Safe)", modeAdvanced: "🔴 Advanced Mode (Hardcore)",
+        stlDrop: "🖨️ Drag & Drop or Click to Upload 3D Print Rocket (.stl)",
         configTitle: "🛠️ Basic Launch Setup", lblEnv: "Launch Lighting:", lblEngine: "Launch Vehicle:",
         subProp: "🚀 Propulsion & Powertrain", lblPayload: "Payload Compartment:", lblFuel: "Stage 1 Fuel Load (%):", lblThrottle: "Engine Throttle (%):", lblOfRatio: "Oxidizer/Fuel Ratio (O/F):",
         subGnc: "🧭 Guidance, Navigation & Control (GNC)", lblTurn: "Pitch-over Altitude (km):", lblTvc: "TVC Gimbal Response Gain:",
@@ -93,7 +250,22 @@ const I18N = {
         lblStatStatus: "Mission Status", lblStatMaxvel: "Max Velocity", lblStatMaxq: "Max Dyn Pressure (Max-Q)", lblStatPeri: "Periapsis Deviation", lblStatOrbit: "Final Orbit", lblStatFuel: "Propellant Margin",
         envOptions: { DAY: "☀️ Day Launch (Sunny)", NIGHT: "🌙 Night Launch (Starfield)" },
         payloadOptions: { "8000": "Crewed Spacecraft (8,000 kg)", "15000": "Space Station Module (15,000 kg)", "35000": "Heavy Cargo Pod (35,000 kg)", "60000": "Extreme Overload Pod (60,000 kg) ⚠️" },
-        milestones: { escape: "🚀 T+20s Tower Jettison!", boosters: "⚡ T+45s Stage 1 Separation!", fairing: "✨ T+60s Fairing Separation!", stage2: "🛰️ T+110s Stage 2 Cutoff & Inserted!", orbit: "🏆 Solar Panels Deployed. Orbit Complete!" }
+        milestones: { 
+            escape: "🚀 T+20s Tower Jettison!", 
+            boosters: "⚡ T+45s Stage 1 Separation!", 
+            fairing: "✨ T+60s Fairing Separation!", 
+            stage2: "🛰️ T+110s Stage 2 Cutoff & Inserted!", 
+            orbit: "🏆 Solar Panels Deployed. Orbit Complete!" 
+        },
+        speech: {
+            numbers: ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"],
+            ignition: "Main engine ignition... Liftoff!",
+            escape: "Launch escape tower jettison confirmed.",
+            boosters: "Stage one separation confirmed.",
+            fairing: "Fairing separation confirmed.",
+            orbit: "Orbital insertion nominal! Mission successful!",
+            abort: "Warning! Structural failure. Mission abort!"
+        }
     }
 };
 
@@ -106,6 +278,102 @@ function showMilestone(text, color) {
     el.innerText = text; document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
 }
 
+// 🖨️ 3D 打印 STL 幾何運算
+function computeSTLProperties(geometry) {
+    const pos = geometry.attributes.position.array;
+    let volume = 0;
+    const p1 = new THREE.Vector3(), p2 = new THREE.Vector3(), p3 = new THREE.Vector3();
+
+    for (let i = 0; i < pos.length; i += 9) {
+        p1.set(pos[i], pos[i+1], pos[i+2]);
+        p2.set(pos[i+3], pos[i+4], pos[i+5]);
+        p3.set(pos[i+6], pos[i+7], pos[i+8]);
+        volume += p1.dot(p2.cross(p3)) / 6.0;
+    }
+    volume = Math.abs(volume);
+
+    geometry.computeBoundingBox();
+    const bbox = geometry.boundingBox;
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+
+    const targetHeightM = 60.0;
+    const currentHeight = size.y || 1.0;
+    const scaleFactor = targetHeightM / currentHeight;
+
+    const radiusEst = (size.x + size.z) / 4.0 * scaleFactor;
+    const frontalArea = Math.PI * radiusEst * radiusEst;
+    const estDryMass = Math.max(15000, Math.min(80000, volume * scaleFactor * 0.15));
+
+    return {
+        heightM: targetHeightM,
+        dryMassStage1: Math.round(estDryMass * 0.8),
+        fuelMassStage1: Math.round(estDryMass * 9.5),
+        dryMassStage2: Math.round(estDryMass * 0.2),
+        fuelMassStage2: Math.round(estDryMass * 2.2),
+        thrustSea: Math.round(estDryMass * 180),
+        thrustVac: Math.round(estDryMass * 200),
+        ispSea: 290, ispVac: 318,
+        thrustStage2: Math.round(estDryMass * 35),
+        frontalArea: frontalArea.toFixed(2),
+        scaleFactor: scaleFactor
+    };
+}
+
+function handleSTLFile(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.stl')) {
+        alert(currentLang === 'zh' ? '請上傳有效的 3D 打印 .stl 檔案！' : 'Please upload a valid .stl 3D print file!');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const loader = new THREE.STLLoader();
+            const geometry = loader.parse(e.target.result);
+            geometry.center();
+
+            const stats = computeSTLProperties(geometry);
+            customRocketStats = stats;
+
+            const mat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.8, roughness: 0.2 });
+            const mesh = new THREE.Mesh(geometry, mat);
+
+            const visualScale = 0.1;
+            mesh.scale.set(visualScale, visualScale, visualScale);
+            geometry.computeBoundingBox();
+            mesh.position.y = (geometry.boundingBox.max.y - geometry.boundingBox.min.y) * visualScale * 0.5 + 0.6;
+
+            while (rocketGroup.children.length > 0) rocketGroup.remove(rocketGroup.children[0]);
+            
+            const customGroup = new THREE.Group();
+            customGroup.add(mesh);
+            rocketGroup.add(customGroup);
+
+            const flameGeo = new THREE.ConeGeometry(0.45, 4.0, 24);
+            flameGeo.translate(0, -2.0, 0);
+            flameMesh = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 }));
+            flameMesh.visible = false;
+            rocketGroup.add(flameMesh);
+
+            const grpCustom = document.getElementById('grp-custom');
+            if (grpCustom) grpCustom.style.display = 'block';
+            document.getElementById('sel-engine').value = 'CUSTOM_STL';
+
+            const infoBox = document.getElementById('stl-info');
+            infoBox.style.display = 'block';
+            infoBox.innerHTML = `✅ <b>${file.name}</b> 解析成功！<br>• 乾重: ${(stats.dryMassStage1+stats.dryMassStage2)/1000}t | 起飛推力: ${(stats.thrustSea/1000).toFixed(0)}kN<br>• 截面積: ${stats.frontalArea}m² | 氣動外形已載入`;
+            
+            updateStatus(currentLang === 'zh' ? `✅ 自訂 3D 打印模型 [${file.name}] 裝載完成！` : `✅ Custom STL Model [${file.name}] Armed!`, "#10b981");
+
+        } catch (err) {
+            console.error(err);
+            alert(currentLang === 'zh' ? '解析 STL 失敗，請確認檔案格式是否正確。' : 'Failed to parse STL file.');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
 function applyLanguageUI() {
     const t = I18N[currentLang];
     setText('ui-title', t.title); setText('ui-subtitle', t.subtitle); setText('btn-lang', t.langBtn);
@@ -114,6 +382,7 @@ function applyLanguageUI() {
     setText('lbl-mode', isAdvancedMode ? t.modeAdvanced : t.modeSimple);
     document.getElementById('lbl-mode').style.color = isAdvancedMode ? '#ef4444' : '#10b981';
     
+    setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
     setText('sub-prop', t.subProp); setText('lbl-payload', t.lblPayload); setText('lbl-fuel', t.lblFuel);
     setText('lbl-throttle', t.lblThrottle); setText('lbl-ofratio', t.lblOfRatio);
@@ -196,48 +465,64 @@ function evaluateStructuralLimits(rocket) {
     if (rocket.flightTime > 3.0 && alt < 20 && twr < 1.05) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? "推重比不足 (TWR < 1.05)，無法離地並在發射台過熱引爆" : "PAD TWR OVERLOAD: Insufficient thrust to lift mass.";
+        playExplosionSound();
+        stopRocketRumble();
+        speakMissionCallout(I18N[currentLang].speech.abort);
         triggerCatastrophicExplosion(visualPos); cameraShake = 4.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (Math.abs(rocket.ofRatio - 1.0) > 0.16) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? "氧化劑/燃料混合比嚴重失調，燃燒室壓力劇烈震盪引爆" : "O/F RATIO ANOMALY: Severe mixture imbalance.";
+        playExplosionSound();
+        stopRocketRumble();
+        speakMissionCallout(I18N[currentLang].speech.abort);
         triggerCatastrophicExplosion(visualPos); cameraShake = 4.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     const windStress = (rocket.windShear / 15.0);
     if (dynQkPa * windStress > 55.0 && alt < 20000) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? `動態氣壓與切變風疊加突破極限 (${(dynQkPa*windStress).toFixed(1)} kPa)，箭體空中氣動剪切斷裂` : `AERODYNAMIC SHEAR FAILURE: Exceeded 55 kPa envelope.`;
+        playExplosionSound();
+        stopRocketRumble();
+        speakMissionCallout(I18N[currentLang].speech.abort);
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.5; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (rocket.tvcGain > 1.35 && speed > 200 && alt < 25000) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? "TVC 噴嘴靈敏度過高引發高頻震顫，箭體結構共振空中解體" : "CONTROL RESONANCE: Excessive TVC gain induced fatal flutter.";
+        playExplosionSound();
+        stopRocketRumble();
+        speakMissionCallout(I18N[currentLang].speech.abort);
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.5; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
     if (rocket.currentGForce > 5.5 && rocket.flightTime > 10) {
         rocket.isDestroyed = true;
         rocket.failureReason = currentLang === 'zh' ? `加速度過載超過 5.5 G (${rocket.currentGForce.toFixed(2)} G)，結構被擠壓破壞` : `G-FORCE OVERLOAD: Structural envelope exceeded 5.5 G.`;
+        playExplosionSound();
+        stopRocketRumble();
+        speakMissionCallout(I18N[currentLang].speech.abort);
         triggerCatastrophicExplosion(visualPos); cameraShake = 3.0; showMissionDebrief(getOrbitalElements(rocket)); return;
     }
 }
 
-// 🛰️ 真實多級分離時序（配合航程可視化）
+// 🛰️ 真實多級分離時序 + 爆破音效 + 語音廣播
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
+    const sp = I18N[currentLang].speech;
 
-    // 1. T+20s: 拋逃逸塔
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
             spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 40, 0));
             activeRocketParts.escapeTower.visible = false;
         }
+        playStagingSound();
         showMilestone(ms.escape, "#ef4444");
+        speakMissionCallout(sp.escape);
     }
 
-    // 2. T+45s: 助推器/一級分離，進入二級燃燒
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
@@ -245,24 +530,28 @@ function handleMultiStageSeparation(rocket) {
             spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(15, -30, 15));
             activeRocketParts.boosters.visible = false;
         }
+        playStagingSound();
         bulletTimeTimer = 2.5;
         currentCamMode = CAM_MODE.STAGE_SEP;
         showMilestone(ms.boosters, "#f59e0b");
+        speakMissionCallout(sp.boosters);
     }
 
-    // 3. T+60s: 拋整流罩
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
+        playStagingSound();
         showMilestone(ms.fairing, "#38bdf8");
+        speakMissionCallout(sp.fairing);
     }
 
-    // 4. T+110s: 二級入軌關機 (SECO)
     if (t >= 110 && !rocket.stage2Separated) {
         rocket.stage2Separated = true;
         rocket.missionAccomplished = true;
         rocket.throttle = 0;
+        stopRocketRumble();
         showMilestone(ms.stage2, "#10b981");
         updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
+        speakMissionCallout(sp.orbit);
     }
 }
 
@@ -302,7 +591,7 @@ function updateTelemetryValues() {
     setText('t-twr', currentTwr.toFixed(2));
     setText('t-thrust', `${(rocket.getThrustVector().length()/1000).toFixed(0)} kN`);
 
-    let stageName = `${currentLang==='zh'?rocket.engine.name:rocket.engine.nameEn} (${t.ascending})`;
+    let stageName = `${rocket.engine ? (currentLang==='zh'?rocket.engine.name:rocket.engine.nameEn) : 'Custom STL'} (${t.ascending})`;
     if (rocket.isDestroyed) stageName = "💥 CATASTROPHIC FAILURE";
     else if (rocket.stage2Separated) stageName = "🛰️ 300km Orbit Cruise";
     else if (rocket.boostersSeparated) stageName = "Stage 2 Burn";
@@ -327,7 +616,7 @@ function showMissionDebrief(orbit) {
     setText('stat-maxq', `${(rocket.maxQ / 1000).toFixed(1)} kPa`);
     setText('stat-peri-err', `${periErr.toFixed(1)} km`);
     setText('stat-orbit-alt', `${(orbit.periapsis/1000).toFixed(1)} km x ${(orbit.apoapsis/1000).toFixed(1)} km`);
-    const fuelLeft = Math.round((rocket.fuel2 / rocket.engine.fuelMassStage2) * 100);
+    const fuelLeft = Math.round((rocket.fuel2 / (rocket.engine ? rocket.engine.fuelMassStage2 : 90000)) * 100);
     setText('stat-fuel-left', `${fuelLeft}%`);
     
     if (rocket.isDestroyed) {
@@ -344,21 +633,42 @@ function showMissionDebrief(orbit) {
     }
 }
 
+// 🎙️ 倒數警報音效 + 語音廣播
 function startCountdownSequence() {
     if (isCountingDown) return;
     isCountingDown = true; countdownTime = 10;
+    initAudioContext();
     document.getElementById('countdown-hud').style.display = 'flex';
     
-    // 📱 手機優化：點擊發射瞬間立刻隱藏主面板，避免遮擋全景
     isUIVisible = false;
     const box = document.getElementById('ui-overlay-box');
     if (box) box.classList.add('collapsed');
     setText('btn-toggle-ui', I18N[currentLang].toggleUiHide);
     
+    speakMissionCallout(I18N[currentLang].speech.numbers[10]);
+
     const timerInterval = setInterval(() => {
         countdownTime--;
         document.getElementById('countdown-timer').innerText = `T-${countdownTime}`;
-        if (countdownTime <= 0) { clearInterval(timerInterval); document.getElementById('countdown-hud').style.display = 'none'; executeLiftoff(); }
+        
+        // 最後 3 秒播放高頻倒數嗶聲
+        if (countdownTime <= 3 && countdownTime > 0) {
+            playBeepSound(1200, 0.12);
+        } else if (countdownTime > 3) {
+            playBeepSound(700, 0.08);
+        }
+
+        if (countdownTime > 0) {
+            speakMissionCallout(I18N[currentLang].speech.numbers[countdownTime]);
+        }
+
+        if (countdownTime <= 0) { 
+            clearInterval(timerInterval); 
+            document.getElementById('countdown-hud').style.display = 'none'; 
+            speakMissionCallout(I18N[currentLang].speech.ignition);
+            startRocketRumble();
+            executeLiftoff(); 
+        }
     }, 1000);
 }
 
@@ -375,7 +685,20 @@ function executeLiftoff() {
     let driftNoise = isAdvancedMode ? ((parseInt(document.getElementById('rng-drift').value, 10) || 0) / 100) : 0;
 
     rocket = new RocketState();
-    rocket.initEngine(engKey, payload, fuelFactor, turnAltKm, ofRatio, tvcGain, windShear, driftNoise);
+
+    if (engKey === 'CUSTOM_STL' && customRocketStats) {
+        rocket.engine = {
+            name: "自訂 3D 打印火箭", nameEn: "Custom STL Rocket",
+            ...customRocketStats
+        };
+        rocket.payloadMass = payload;
+        rocket.fuel1 = customRocketStats.fuelMassStage1 * fuelFactor;
+        rocket.fuel2 = customRocketStats.fuelMassStage2;
+        rocket.gravityTurnAlt = turnAltKm * 1000;
+    } else {
+        rocket.initEngine(engKey, payload, fuelFactor, turnAltKm, ofRatio, tvcGain, windShear, driftNoise);
+    }
+
     rocket.throttle = throttle;
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
@@ -387,13 +710,28 @@ function bindUI() {
     document.getElementById('btn-launch').onclick = startCountdownSequence;
     document.getElementById('btn-reset').onclick = () => location.reload();
     document.getElementById('sel-env').onchange = (e) => setEnvironmentMode(e.target.value);
-    document.getElementById('sel-engine').onchange = (e) => switchRocketMesh(e.target.value);
+    document.getElementById('sel-engine').onchange = (e) => {
+        if (e.target.value !== 'CUSTOM_STL') switchRocketMesh(e.target.value);
+    };
     document.getElementById('btn-lang').onclick = () => { currentLang = currentLang === 'zh' ? 'en' : 'zh'; applyLanguageUI(); };
 
     document.getElementById('chk-advanced-mode').onchange = (e) => {
         isAdvancedMode = e.target.checked;
         document.getElementById('advanced-config').style.display = isAdvancedMode ? 'block' : 'none';
         applyLanguageUI();
+    };
+
+    const dropZone = document.getElementById('stl-drop-zone');
+    const fileInput = document.getElementById('stl-file-input');
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => { if (e.target.files.length > 0) handleSTLFile(e.target.files[0]); };
+
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+    dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleSTLFile(e.dataTransfer.files[0]);
     };
 
     document.getElementById('btn-toggle-ui').onclick = () => {
@@ -441,6 +779,10 @@ function gameLoop(now) {
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
         const speed = rocket.v.length();
         
+        // 🔊 即時根據海拔與推力調整引擎轟鳴音效
+        const thrustMag = rocket.getThrustVector().length();
+        updateRocketRumble(alt, thrustMag > 0 ? (rocket.throttle || 1.0) : 0.0);
+
         updateEnvironmentVisuals(alt);
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
@@ -450,7 +792,6 @@ function gameLoop(now) {
         rocketGroup.scale.set(visualScale, visualScale, visualScale);
         rocketGroup.position.copy(visualPos);
         
-        // 🚀 平滑航向角：鎖定真實推力指向
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
@@ -489,11 +830,10 @@ function gameLoop(now) {
 
         camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.09);
 
-        // 🔥 尾焰向發動機下方噴射
-        const thrustMag = rocket.getThrustVector().length();
         if (thrustMag > 1000) {
             if (flameMesh) { 
                 flameMesh.visible = true; 
+                flameMesh.material.color.setHex(0xffaa00);
                 flameMesh.scale.set(1.0, rocket.throttle || 1.0, 1.0); 
             }
             spawnExhaustParticles(visualPos, rocket.throttle * visualScale, alt < 3000);
@@ -510,6 +850,7 @@ function gameLoop(now) {
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
     } else {
+        stopRocketRumble();
         if (rocketGroup && !rocket) { rocketGroup.quaternion.set(0, 0, 0, 1); rocketGroup.position.set(0, 1000.4, 0); }
         if (flameMesh) flameMesh.visible = false;
         if (machConeMesh) machConeMesh.visible = false;
