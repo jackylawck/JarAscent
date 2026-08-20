@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (無箭頭干擾、真實彈道多級分離與雙層航天音效)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (包含氣動阻尼落體、暫停 3D 自由視角與 Web Audio)
  * @license MIT
  */
 
@@ -25,6 +25,8 @@ let currentLang = 'zh';
 let isAdvancedMode = false;
 let customRocketStats = null;
 
+let isPaused = false; // ⏸️ 暫停狀態
+let userInteractingWithCamera = false; // 是否正在手動旋轉 3D 鏡頭
 let lastTime = performance.now();
 let timeScale = 1.0;
 let orbitLine = null;
@@ -37,7 +39,7 @@ let bulletTimeTimer = 0;
 let isUIVisible = true;
 let isDetailTelemetryVisible = false;
 
-const CAM_MODE = { LAUNCH_PAD: 0, LIFTOFF: 1, ASCEND: 2, MAX_Q: 3, STAGE_SEP: 4, ORBIT: 5 };
+const CAM_MODE = { LAUNCH_PAD: 0, LIFTOFF: 1, ASCEND: 2, MAX_Q: 3, STAGE_SEP: 4, ORBIT: 5, FREE: 6 };
 let currentCamMode = CAM_MODE.LAUNCH_PAD;
 let targetCamPos = new THREE.Vector3();
 let targetLookAt = new THREE.Vector3();
@@ -60,7 +62,6 @@ function initAudioContext() {
     }
 }
 
-// 倒數嗶聲
 function playBeepSound(freq = 880, duration = 0.1) {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
@@ -75,7 +76,6 @@ function playBeepSound(freq = 880, duration = 0.1) {
     osc.stop(audioCtx.currentTime + duration);
 }
 
-// 雙層火箭發動機轟鳴 (60Hz次低音 + 布朗噪音破空)
 function startRocketRumble() {
     if (!audioCtx || rocketNoiseSource) return;
 
@@ -146,7 +146,6 @@ function stopRocketRumble() {
     }
 }
 
-// 爆炸螺栓級間分離聲
 function playStagingSound() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
@@ -162,7 +161,6 @@ function playStagingSound() {
     osc.stop(audioCtx.currentTime + 0.25);
 }
 
-// 災難性爆炸解體巨響
 function playExplosionSound() {
     if (!audioCtx) return;
     const bufferSize = audioCtx.sampleRate * 1.5;
@@ -189,7 +187,6 @@ function playExplosionSound() {
     noise.start();
 }
 
-// 語音播報
 function speakMissionCallout(text, lang = currentLang) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -212,6 +209,7 @@ const I18N = {
         subGnc: "🧭 導航制導與控制 (GNC)", lblTurn: "轉向起始高度 (km):", lblTvc: "TVC 噴嘴響應靈敏度:",
         subEnv: "🌪️ 外部環境與電氣感測", lblWind: "高空切變風強度 (m/s):", lblDrift: "IMU 陀螺儀雜訊漂移:",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
+        btnPause: "⏸️ 暫停 (3D 檢視)", btnResume: "▶️ 繼續飛行",
         btnSlower: "⏪ 減速", btnFaster: "加速 ⏩", timeScalePrefix: "倍速: ",
         telemetryTitle: "⚙️ 飛行遙測狀態", ready: "發射台準備就緒，請點擊發射...",
         counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！火箭全力起飛",
@@ -254,6 +252,7 @@ const I18N = {
         subGnc: "🧭 Guidance, Navigation & Control (GNC)", lblTurn: "Pitch-over Altitude (km):", lblTvc: "TVC Gimbal Response Gain:",
         subEnv: "🌪️ Environment & Avionics", lblWind: "High-Alt Wind Shear (m/s):", lblDrift: "IMU Gyro Noise Drift:",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
+        btnPause: "⏸️ Pause (3D Orbit)", btnResume: "▶️ Resume Flight",
         btnSlower: "⏪ Slower", btnFaster: "Faster ⏩", timeScalePrefix: "Warp: ",
         telemetryTitle: "⚙️ Flight Telemetry", ready: "Pad ready. Awaiting countdown sequence...",
         counting: "⚠️ Terminal countdown sequence armed...", liftoff: "🔥 Main Engine Ignition! Liftoff!",
@@ -367,8 +366,8 @@ function handleSTLFile(file) {
             customGroup.add(mesh);
             rocketGroup.add(customGroup);
 
-            const flameGeo = new THREE.ConeGeometry(0.45, 4.0, 24);
-            flameGeo.translate(0, -2.0, 0);
+            const flameGeo = new THREE.ConeGeometry(0.55, 6.0, 24);
+            flameGeo.translate(0, -3.0, 0);
             flameMesh = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 }));
             flameMesh.visible = false;
             rocketGroup.add(flameMesh);
@@ -399,6 +398,7 @@ function applyLanguageUI() {
     setText('lbl-mode', isAdvancedMode ? t.modeAdvanced : t.modeSimple);
     document.getElementById('lbl-mode').style.color = isAdvancedMode ? '#ef4444' : '#10b981';
     
+    setText('btn-pause', isPaused ? t.btnResume : t.btnPause);
     setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
     setText('sub-prop', t.subProp); setText('lbl-payload', t.lblPayload); setText('lbl-fuel', t.lblFuel);
@@ -534,11 +534,11 @@ function handleMultiStageSeparation(rocket) {
     let lateralVec = new THREE.Vector3().crossVectors(forwardVec, upVec).normalize();
     if (lateralVec.lengthSq() < 0.1) lateralVec.set(1, 0, 0);
 
-    // 1. T+20s: 拋逃逸塔 (向前彈射)
+    // 1. T+20s: 拋逃逸塔 (向前加速彈射)
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
-            const escapeImpulse = forwardVec.clone().multiplyScalar(30.0);
+            const escapeImpulse = forwardVec.clone().multiplyScalar(35.0);
             spawnDebrisPiece(rocket, activeRocketParts.escapeTower, escapeImpulse);
             activeRocketParts.escapeTower.visible = false;
         }
@@ -552,13 +552,13 @@ function handleMultiStageSeparation(rocket) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
         
-        const retroImpulse = forwardVec.clone().multiplyScalar(-6.0);
+        const retroImpulse = forwardVec.clone().multiplyScalar(-8.0);
         if (activeRocketParts && activeRocketParts.stage1) {
             spawnDebrisPiece(rocket, activeRocketParts.stage1, retroImpulse);
             activeRocketParts.stage1.visible = false;
         }
         if (activeRocketParts && activeRocketParts.boosters) {
-            const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(6.0));
+            const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(8.0));
             spawnDebrisPiece(rocket, activeRocketParts.boosters, outImpulse);
             activeRocketParts.boosters.visible = false;
         }
@@ -570,16 +570,16 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.boosters);
     }
 
-    // 3. T+60s: 整流罩分離 (蚌殼式向左右兩側炸開)
+    // 3. T+60s: 蚌殼式整流罩分離 (左右兩側炸開)
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
         
         if (activeRocketParts && activeRocketParts.fairingL) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-12.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-14.0));
             activeRocketParts.fairingL.visible = false;
         }
         if (activeRocketParts && activeRocketParts.fairingR) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(12.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(14.0));
             activeRocketParts.fairingR.visible = false;
         }
 
@@ -764,6 +764,28 @@ function bindUI() {
         applyLanguageUI();
     };
 
+    // ⏸️ 暫停與自由 3D 檢視綁定
+    const btnPause = document.getElementById('btn-pause');
+    const togglePause = () => {
+        isPaused = !isPaused;
+        btnPause.innerText = isPaused ? I18N[currentLang].btnResume : I18N[currentLang].btnPause;
+        btnPause.style.background = isPaused ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.2)";
+        btnPause.style.borderColor = isPaused ? "#10b981" : "#f59e0b";
+        btnPause.style.color = isPaused ? "#34d399" : "#fbbf24";
+        if (isPaused) {
+            stopRocketRumble();
+            currentCamMode = CAM_MODE.FREE; // 進入自由鏡頭
+        } else {
+            if (rocket && rocket.isLaunched && !rocket.isDestroyed) startRocketRumble();
+        }
+    };
+    btnPause.onclick = togglePause;
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') togglePause(); });
+
+    // 監聽用戶手動操作 OrbitControls
+    controls.addEventListener('start', () => { userInteractingWithCamera = true; });
+    controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2000); });
+
     const dropZone = document.getElementById('stl-drop-zone');
     const fileInput = document.getElementById('stl-file-input');
     dropZone.onclick = () => fileInput.click();
@@ -798,6 +820,13 @@ function gameLoop(now) {
     let dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
+    if (isPaused) {
+        // ⏸️ 暫停狀態：凍結物理計算，僅允許 3D OrbitControls 自由旋轉檢視
+        controls.update();
+        renderer.render(scene, camera);
+        return;
+    }
+
     let currentEffectiveTimeScale = timeScale;
     if (bulletTimeTimer > 0) { bulletTimeTimer -= dt; currentEffectiveTimeScale = 0.25; }
 
@@ -824,7 +853,6 @@ function gameLoop(now) {
         
         const thrustMag = rocket.getThrustVector().length();
         updateRocketRumble(alt, thrustMag > 0 ? (rocket.throttle || 1.0) : 0.0);
-
         updateEnvironmentVisuals(alt);
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
@@ -837,40 +865,47 @@ function gameLoop(now) {
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
-        if (bulletTimeTimer <= 0) {
-            if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
-            else if (speed > 310 && speed < 440 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
-            else if (rocket.stage === 2 && alt > 150000) currentCamMode = CAM_MODE.ORBIT;
-            else currentCamMode = CAM_MODE.ASCEND;
+        // 自動導演相機 (當用戶未手動滑動視角時自動跟隨)
+        if (!userInteractingWithCamera) {
+            if (bulletTimeTimer <= 0) {
+                if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
+                else if (speed > 310 && speed < 440 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
+                else if (rocket.stage === 2 && alt > 150000) currentCamMode = CAM_MODE.ORBIT;
+                else currentCamMode = CAM_MODE.ASCEND;
+            }
+
+            const orbit = getOrbitalElements(rocket);
+            const shakeX = (Math.random() - 0.5) * cameraShake * 2;
+            const shakeY = (Math.random() - 0.5) * cameraShake * 2;
+            if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.8);
+
+            switch (currentCamMode) {
+                case CAM_MODE.LIFTOFF:
+                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-14 + shakeX, 6 + shakeY, 14)));
+                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 4, 0))); break;
+                case CAM_MODE.MAX_Q:
+                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(30 + shakeX, 5 + shakeY, 0)));
+                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
+                case CAM_MODE.STAGE_SEP:
+                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
+                    targetLookAt.copy(visualPos); break;
+                case CAM_MODE.ORBIT:
+                    const orbitCamDist = Math.max(500, orbit.semiMajorAxis * WORLD_SCALE * 1.2);
+                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.5, orbitCamDist)));
+                    targetLookAt.set(0, 0, 0); break;
+                case CAM_MODE.ASCEND:
+                default:
+                    let camDist = (alt < 2000) ? 25 + alt * 0.015 : 60;
+                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
+                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
+            }
+
+            camera.position.lerp(targetCamPos, 0.08); 
+            controls.target.lerp(targetLookAt, 0.09);
+        } else {
+            // 手動拖拽時，將 OrbitControls 中心錨定在火箭身上
+            controls.target.copy(visualPos);
         }
-
-        const orbit = getOrbitalElements(rocket);
-        const shakeX = (Math.random() - 0.5) * cameraShake * 2;
-        const shakeY = (Math.random() - 0.5) * cameraShake * 2;
-        if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.8);
-
-        switch (currentCamMode) {
-            case CAM_MODE.LIFTOFF:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-14 + shakeX, 6 + shakeY, 14)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 4, 0))); break;
-            case CAM_MODE.MAX_Q:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(30 + shakeX, 5 + shakeY, 0)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
-            case CAM_MODE.STAGE_SEP:
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
-                targetLookAt.copy(visualPos); break;
-            case CAM_MODE.ORBIT:
-                const orbitCamDist = Math.max(500, orbit.semiMajorAxis * WORLD_SCALE * 1.2);
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.5, orbitCamDist)));
-                targetLookAt.set(0, 0, 0); break;
-            case CAM_MODE.ASCEND:
-            default:
-                let camDist = (alt < 2000) ? 25 + alt * 0.015 : 60;
-                targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
-                targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
-        }
-
-        camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.09);
 
         if (thrustMag > 1000) {
             if (flameMesh) { 
