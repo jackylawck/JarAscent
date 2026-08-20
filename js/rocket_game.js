@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D (修復噴嘴對齊、自適應全箭運鏡與多語言)
+ * js/rocket_game.js - JarAscent 3D (整合手機觸覺震動、自適應運鏡、噴嘴座標對齊與多語言)
  * @license MIT
  */
 
@@ -49,6 +49,15 @@ const CAM_MODE = { LAUNCH_PAD: 0, LIFTOFF: 1, ASCEND: 2, MAX_Q: 3, STAGE_SEP: 4,
 let currentCamMode = CAM_MODE.LAUNCH_PAD;
 let targetCamPos = new THREE.Vector3();
 let targetLookAt = new THREE.Vector3();
+
+// ==================== 📳 觸覺震動引擎 (Haptic Vibration API) ====================
+function triggerHaptic(pattern) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+            navigator.vibrate(pattern);
+        } catch (e) {}
+    }
+}
 
 // ==================== 💾 localStorage 持久化配置 ====================
 const STORAGE_KEY = 'jarascent_user_config_v1';
@@ -609,6 +618,7 @@ function triggerAbortSequence(visualPos, shakeAmount) {
     playExplosionSound();
     stopRocketRumble();
     speakMissionCallout(I18N[currentLang].speech.abort, currentLang, 1.25);
+    triggerHaptic([400, 100, 500]); // 📳 爆炸持續強震
     triggerCatastrophicExplosion(visualPos);
     cameraShake = shakeAmount;
     showMissionDebrief(getOrbitalElements(rocket));
@@ -639,6 +649,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.escapeTower.visible = false;
                     }
                     playStagingSound();
+                    triggerHaptic([40, 60, 80]); // 📳 逃逸塔分離雙震
                     cameraShake = Math.max(cameraShake, 1.8);
                     showMilestone(currentLang === 'zh' ? `🚀 T+${sep.time.toFixed(0)}s 逃逸塔分離!` : `🚀 T+${sep.time.toFixed(0)}s Tower Jettison!`, "#ef4444");
                     speakMissionCallout(sp.escape);
@@ -661,6 +672,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.boosters.visible = false;
                     }
                     playStagingSound();
+                    triggerHaptic([120, 80, 200]); // 📳 一級分離沉重機械頓挫
                     cameraShake = 3.8;
                     bulletTimeTimer = 2.0;
                     showMilestone(currentLang === 'zh' ? `⚡ T+${sep.time.toFixed(0)}s 一級分離，二級點火!` : `⚡ T+${sep.time.toFixed(0)}s Stage 1 Sep & S2 Ignition!`, "#f59e0b");
@@ -682,6 +694,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.fairingR.visible = false;
                     }
                     playStagingSound();
+                    triggerHaptic([40, 60, 80]); // 📳 整流罩拋離輕震
                     cameraShake = Math.max(cameraShake, 1.5);
                     showMilestone(currentLang === 'zh' ? `✨ T+${sep.time.toFixed(0)}s 拋整流罩!` : `✨ T+${sep.time.toFixed(0)}s Fairing Sep!`, "#38bdf8");
                     speakMissionCallout(sp.fairing);
@@ -691,6 +704,7 @@ function handleDataDrivenSeparation(rocket) {
                     rocket.missionAccomplished = true;
                     rocket.throttle = 0;
                     stopRocketRumble();
+                    triggerHaptic([200, 100, 200, 100, 300]); // 📳 圓滿入軌慶祝節奏
                     showMilestone(currentLang === 'zh' ? `🛰️ T+${sep.time.toFixed(0)}s 二級熄火，入軌成功!` : `🛰️ T+${sep.time.toFixed(0)}s Stage 2 Cutoff & Inserted!`, "#10b981");
                     updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
                     speakMissionCallout(sp.orbit);
@@ -748,6 +762,7 @@ function updateTelemetryValues() {
     const velBox = document.getElementById('hud-box-vel');
     if (parseFloat(mach) >= 1.0 && !sonicBoomTriggered) {
         sonicBoomTriggered = true;
+        triggerHaptic([100, 50, 150]); // 📳 音爆雙震
         if (velBox) {
             velBox.classList.add('sonic-boom');
             setTimeout(() => velBox.classList.remove('sonic-boom'), 800);
@@ -940,6 +955,7 @@ function startCountdownSequence() {
         const urgency = countdownTime <= 3 ? 1.25 : 1.0;
         if (countdownTime <= 3 && countdownTime > 0) {
             playBeepSound(1280, 0.14, 1.3);
+            triggerHaptic([30]); // 📳 最後3秒心跳滴答微震
         } else if (countdownTime > 3) {
             playBeepSound(720, 0.08, 1.0);
         }
@@ -999,6 +1015,7 @@ function executeLiftoff() {
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
     cameraShake = 2.8;
+    triggerHaptic([60, 30, 80, 40, 100, 50, 150]); // 📳 點火起飛密集轟鳴震動
     updateStatus(I18N[currentLang].liftoff, "#38bdf8");
 
     const manualHud = document.getElementById('manual-control-hud');
@@ -1230,16 +1247,15 @@ function gameLoop(now) {
 
         const isS2 = rocket.stage === 2;
 
-        // 🎯 核心修復 1：精確噴嘴出口世界坐標 (消除噴焰與火箭斷層脫節)
-        // 透過 rocketGroup 矩陣變換直接轉換局部坐標，並乘以 visualScale
-        const localNozzleY = isS2 ? 0.0 : -0.2; // 嚴格對準當前級別發動機噴嘴底部邊緣
+        // 🎯 精確噴嘴出口世界坐標 (消除噴焰與火箭斷層脫節)
+        const localNozzleY = isS2 ? 0.0 : -0.2;
         const currentNozzleWorldPos = new THREE.Vector3(0, localNozzleY, 0).applyMatrix4(rocketGroup.matrixWorld);
 
         const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * speed * speed / 1000);
         const dynamicQShake = Math.min(1.8, dynQkPa / 30.0);
         if (dynamicQShake > cameraShake) cameraShake = dynamicQShake;
 
-        // 🎯 核心修復 2：自適應視距與全箭質心對焦
+        // 🎯 自適應視距與全箭質心對焦
         if (isCockpitView) {
             const localCockpitPos = new THREE.Vector3(0, (isS2 ? 7.8 : 9.5), 0.45);
             const cockpitWorldPos = localCockpitPos.applyMatrix4(rocketGroup.matrixWorld);
@@ -1254,12 +1270,10 @@ function gameLoop(now) {
                 else currentCamMode = CAM_MODE.ASCEND;
             }
 
-            // 動態焦點鎖定火箭中央質心
             const craftCenterWorldPos = rocketGroup.position.clone();
             const centerOffsetHeight = (isS2 ? 4.2 : 5.0) * visualScale;
             craftCenterWorldPos.addScaledVector(thrustDir, centerOffsetHeight);
 
-            // 視距自動隨視覺放大倍率縮放，防貼臉或丟失
             const baseCamDist = (alt < 1500 ? (32 + alt * 0.02) : (55 + Math.log10(alt + 1) * 12)) * (visualScale * 0.45);
 
             const shakeX = (Math.random() - 0.5) * cameraShake * 1.8;
