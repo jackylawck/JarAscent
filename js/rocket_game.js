@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D (修復純英化、重置鏡頭坐標與完全清理舊殘骸)
+ * js/rocket_game.js - JarAscent 3D (徹底修復全英化、按鈕多語言與結算狀態)
  * @license MIT
  */
 
@@ -277,6 +277,8 @@ const I18N = {
         subEnv: "🌪️ 外部環境與電氣感測", lblWind: "高空切變風強度 (m/s):", lblDrift: "IMU 陀螺儀雜訊漂移:",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
         btnPause: "⏸️ 暫停", btnResume: "▶️ 繼續飛行", btnResetCam: "🎥 重設視角", btnCockpit: "🪟 座艙視角 (C)",
+        btnQuickRetry: "⚡ 再次挑戰 (保留設定)", btnDebriefRestart: "🔄 重設全部",
+        btnPwaUpdate: "🔄 檢查更新", btnPwaNew: "🚀 發現新版 (點擊更新)", btnPwaUpdating: "⏳ 更新中...",
         btnSlower: "⏪ 減速", btnFaster: "加速 ⏩", timeScalePrefix: "倍速: ",
         telemetryTitle: "⚙️ 飛行遙測狀態", ready: "發射台準備就緒，請點擊發射...",
         liftoff: "🔥 點火升空！火箭全力起飛",
@@ -287,8 +289,13 @@ const I18N = {
         tGforce: "即時過載 G-Force", tIsp: "瞬時比衝 Isp",
         tPeri: "預測近地點", tApo: "預測遠地點", tEcc: "軌道偏心率",
         onPad: "發射台地面 (On Pad)", ascending: "主動爬升段 (Ascending)", stableOrbit: "🟢 圓軌道巡航 (Orbit)",
-        abortTitle: "💥 任務異常中止 (RUD Failure)", abortRestart: "🔄 重新設定並再次發射",
+        debriefTitleLegend: "🌟 傳奇星際導航官",
+        debriefTitleNominal: "🏆 完美入軌 (Nominal)",
+        debriefTitleSuborbital: "🚀 次軌道試射完成",
+        abortTitle: "💥 任務異常中止 (RUD Failure)",
+        statSuccess: "入軌成功", statSuborbital: "燃料耗盡，未達目標軌道", statFail: "任務失敗 (Vehicle RUD)",
         lblStatStatus: "任務狀態", lblStatMaxvel: "最高速度", lblStatMaxq: "最大動態氣壓", lblStatPeri: "近地點誤差", lblStatOrbit: "最終軌道", lblStatFuel: "剩餘燃料裕度",
+        rdvTitle: "🛰️ 空間站交會雷達 (Tiangong)", rdvDist: "相對距離", rdvVel: "相對速度", rdvPhase: "軌道相位角",
         manualHud: "🎮 <b>手動操縱模式啟用 (Manual Flight)</b><br>• 鍵盤 [W/S]: 俯仰 Pitch | [A/D]: 偏航 Yaw<br>• 鍵盤 [Q/E]: 滾轉 Roll | [C]: 切換座艙視角",
         envOptions: { DAY: "☀️ 白天發射 (Day Launch)", NIGHT: "🌙 夜間發射 (Night Launch)" },
         payloadOptions: { "8000": "新一代載人飛船 (8,000 kg)", "15000": "空間站核心艙 (15,000 kg)", "35000": "重型補給艙 (35,000 kg)", "60000": "極限超重載荷 (60,000 kg) ⚠️" },
@@ -314,6 +321,8 @@ const I18N = {
         subEnv: "🌪️ Environment & Avionics", lblWind: "High-Alt Wind Shear (m/s):", lblDrift: "IMU Gyro Noise Drift:",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
         btnPause: "⏸️ Pause", btnResume: "▶️ Resume", btnResetCam: "🎥 Reset Cam", btnCockpit: "🪟 Cockpit (C)",
+        btnQuickRetry: "⚡ Retry (Keep Settings)", btnDebriefRestart: "🔄 Re-Configure All",
+        btnPwaUpdate: "🔄 Check Updates", btnPwaNew: "🚀 Update Available", btnPwaUpdating: "⏳ Updating...",
         btnSlower: "⏪ Slower", btnFaster: "Faster ⏩", timeScalePrefix: "Warp: ",
         telemetryTitle: "⚙️ Flight Telemetry", ready: "Pad ready. Awaiting countdown sequence...",
         liftoff: "🔥 Main Engine Ignition! Liftoff!",
@@ -324,8 +333,13 @@ const I18N = {
         tGforce: "Acceleration G-Force", tIsp: "Specific Impulse",
         tPeri: "Predicted Periapsis", tApo: "Predicted Apoapsis", tEcc: "Eccentricity (e)",
         onPad: "Vehicle on Pad (Pre-Ignition)", ascending: "Active Ascent Phase", stableOrbit: "🟢 Stable Orbit Cruise",
-        abortTitle: "💥 Catastrophic Mission Abort", abortRestart: "🔄 Re-Configure & Launch Again",
+        debriefTitleLegend: "🌟 Legendary Space Navigator",
+        debriefTitleNominal: "🏆 Nominal Insertion",
+        debriefTitleSuborbital: "🚀 Suborbital Completed",
+        abortTitle: "💥 Catastrophic Mission Abort",
+        statSuccess: "Inserted successfully", statSuborbital: "Propellant depleted", statFail: "Vehicle RUD Failure",
         lblStatStatus: "Mission Status", lblStatMaxvel: "Max Velocity", lblStatMaxq: "Max Dyn Pressure (Max-Q)", lblStatPeri: "Periapsis Deviation", lblStatOrbit: "Final Orbit", lblStatFuel: "Propellant Margin",
+        rdvTitle: "🛰️ Space Station Radar (Tiangong)", rdvDist: "Rel Distance", rdvVel: "Rel Speed", rdvPhase: "Phase Angle",
         manualHud: "🎮 <b>Manual Attitude Mode Active</b><br>• Keys [W/S]: Pitch | [A/D]: Yaw<br>• Keys [Q/E]: Roll | [C]: Cockpit Camera",
         envOptions: { DAY: "☀️ Day Launch (Sunny)", NIGHT: "🌙 Night Launch (Starfield)" },
         payloadOptions: { "8000": "Crewed Spacecraft (8,000 kg)", "15000": "Space Station Module (15,000 kg)", "35000": "Heavy Cargo Pod (35,000 kg)", "60000": "Extreme Overload Pod (60,000 kg) ⚠️" },
@@ -460,6 +474,15 @@ function applyLanguageUI() {
     setText('btn-reset-cam', t.btnResetCam);
     setText('btn-cockpit', t.btnCockpit);
 
+    setText('btn-quick-retry', t.btnQuickRetry);
+    setText('btn-debrief-restart', t.btnDebriefRestart);
+    setText('btn-pwa-update', t.btnPwaUpdate);
+
+    setText('lbl-rdv-title', t.rdvTitle);
+    setText('lbl-rdv-dist', t.rdvDist);
+    setText('lbl-rdv-vel', t.rdvVel);
+    setText('lbl-rdv-phase', t.rdvPhase);
+
     const manualHud = document.getElementById('manual-control-hud');
     if (manualHud) manualHud.innerHTML = t.manualHud;
 
@@ -482,7 +505,6 @@ function applyLanguageUI() {
     setText('lbl-stat-status', t.lblStatStatus); setText('lbl-stat-maxvel', t.lblStatMaxvel);
     setText('lbl-stat-maxq', t.lblStatMaxq); setText('lbl-stat-peri', t.lblStatPeri);
     setText('lbl-stat-orbit', t.lblStatOrbit); setText('lbl-stat-fuel', t.lblStatFuel);
-    setText('btn-debrief-restart', t.abortRestart);
 
     const selEnv = document.getElementById('sel-env');
     if (selEnv) Array.from(selEnv.options).forEach(opt => { if (t.envOptions[opt.value]) opt.text = t.envOptions[opt.value]; });
@@ -495,6 +517,7 @@ function applyLanguageUI() {
         updateStatus(t.ready);
         setText('t-stage-name', t.onPad);
         setText('t-orbit', t.onPad);
+        setText('debrief-title', t.debriefTitleLegend);
     }
 }
 
@@ -782,6 +805,7 @@ function updateTelemetryValues() {
 }
 
 function showMissionDebrief(orbit) {
+    const t = I18N[currentLang];
     const modal = document.getElementById('debrief-modal'); 
     if (!modal || modal.style.display === 'flex') return; 
     modal.style.display = 'flex';
@@ -803,27 +827,27 @@ function showMissionDebrief(orbit) {
 
     if (rocket.isDestroyed) {
         if (rankEl) { rankEl.innerText = "FAIL"; rankEl.style.color = "#ef4444"; }
-        setText('debrief-title', I18N[currentLang].abortTitle); 
-        setText('stat-status', "任務失敗 (Vehicle RUD)");
+        setText('debrief-title', t.abortTitle); 
+        setText('stat-status', t.statFail);
 
         if (diagBox && rocket.failureReason) {
             diagBox.style.display = 'block';
-            diagBox.innerHTML = `<b>⚠️ 事故黑盒診斷：</b><br>${rocket.failureReason}`;
+            diagBox.innerHTML = `<b>${currentLang === 'zh' ? '⚠️ 事故黑盒診斷：' : '⚠️ Blackbox Failure Log:'}</b><br>${rocket.failureReason}`;
         }
         if (recBox && rocket.recommendation) {
             recBox.style.display = 'block';
-            recBox.innerHTML = `<b>🛠️ 首席工程師改進建議：</b><br>${rocket.recommendation}`;
+            recBox.innerHTML = `<b>${currentLang === 'zh' ? '🛠️ 首席工程師改進建議：' : '🛠️ Chief Engineer Advice:'}</b><br>${rocket.recommendation}`;
         }
     } else if (orbit && orbit.isOrbital) {
         if (rankEl) { rankEl.innerText = "S+"; rankEl.style.color = "#fbbf24"; }
-        setText('debrief-title', currentLang === 'zh' ? "🏆 完美入軌 (Nominal)" : "🏆 Nominal Insertion");
-        setText('stat-status', currentLang === 'zh' ? "入軌圓滿成功" : "Inserted successfully");
+        setText('debrief-title', t.debriefTitleNominal);
+        setText('stat-status', t.statSuccess);
         if (diagBox) diagBox.style.display = 'none';
         if (recBox) recBox.style.display = 'none';
     } else {
         if (rankEl) { rankEl.innerText = "B"; rankEl.style.color = "#94a3b8"; }
-        setText('debrief-title', currentLang === 'zh' ? "🚀 次軌道試射完成" : "🚀 Suborbital Completed");
-        setText('stat-status', currentLang === 'zh' ? "燃料耗盡，未達目標軌道" : "Propellant depleted");
+        setText('debrief-title', t.debriefTitleSuborbital);
+        setText('stat-status', t.statSuborbital);
         if (diagBox) diagBox.style.display = 'none';
         if (recBox) recBox.style.display = 'none';
     }
