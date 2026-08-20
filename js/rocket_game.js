@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (鏡頭鎖定主航天器與動態尾焰)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (鏡頭永遠鎖定主飛行器)
  * @license MIT
  */
 
@@ -521,7 +521,7 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
-// 🛰️ 真實多級分離時序 + 鏡頭平滑跟隨主航天器
+// 🛰️ 真實多級分離時序
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
@@ -538,7 +538,7 @@ function handleMultiStageSeparation(rocket) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
             const escapeImpulse = forwardVec.clone().multiplyScalar(40.0);
-            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, escapeImpulse);
+            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, escapeImpulse, lateralVec);
             activeRocketParts.escapeTower.visible = false;
         }
         playStagingSound();
@@ -553,12 +553,12 @@ function handleMultiStageSeparation(rocket) {
         
         const retroImpulse = forwardVec.clone().multiplyScalar(-10.0);
         if (activeRocketParts && activeRocketParts.stage1) {
-            spawnDebrisPiece(rocket, activeRocketParts.stage1, retroImpulse);
+            spawnDebrisPiece(rocket, activeRocketParts.stage1, retroImpulse, lateralVec);
             activeRocketParts.stage1.visible = false;
         }
         if (activeRocketParts && activeRocketParts.boosters) {
             const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(10.0));
-            spawnDebrisPiece(rocket, activeRocketParts.boosters, outImpulse);
+            spawnDebrisPiece(rocket, activeRocketParts.boosters, outImpulse, forwardVec);
             activeRocketParts.boosters.visible = false;
         }
 
@@ -573,11 +573,11 @@ function handleMultiStageSeparation(rocket) {
         rocket.fairingSeparated = true;
         
         if (activeRocketParts && activeRocketParts.fairingL) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-16.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-16.0), forwardVec);
             activeRocketParts.fairingL.visible = false;
         }
         if (activeRocketParts && activeRocketParts.fairingR) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(16.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(16.0), forwardVec);
             activeRocketParts.fairingR.visible = false;
         }
 
@@ -911,12 +911,13 @@ function gameLoop(now) {
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
-        // 🎯 計算當前點火發動機的真實世界坐標 (一級底部 vs 二級底部)
-        const nozzleOffset = (rocket.stage === 2) ? 3.5 * visualScale : 0.2 * visualScale;
+        // 🎯 正確計算發動機噴口與鏡頭鎖定點（一級在底部，二級在上方 5.8m）
+        const isS2 = rocket.stage === 2;
+        const nozzleOffset = isS2 ? 5.8 * visualScale : 0.3 * visualScale;
         const currentNozzlePos = visualPos.clone().add(thrustDir.clone().multiplyScalar(nozzleOffset));
 
-        // 🎯 鏡頭永遠精確鎖定主飛行器（第二級/太空船中心）
-        const craftFocusPos = visualPos.clone().add(thrustDir.clone().multiplyScalar(4.5 * visualScale));
+        // 🎯 鏡頭永遠鎖定升空中的第二級/載荷艙中心
+        const craftFocusPos = visualPos.clone().add(thrustDir.clone().multiplyScalar((isS2 ? 7.2 : 4.5) * visualScale));
 
         if (!userInteractingWithCamera) {
             if (bulletTimeTimer <= 0) {
@@ -959,9 +960,9 @@ function gameLoop(now) {
             controls.target.copy(craftFocusPos);
         }
 
-        // 🔥 動態發射尾焰（一級橘紅大氣火焰 / 二級深藍真空羽流）
+        // 🔥 動態發射尾焰（一級大氣橘紅烈焰 / 二級深藍真空羽流）
         if (thrustMag > 1000) {
-            spawnExhaustParticles(currentNozzlePos, thrustDir, rocket.throttle || 1.0, rocket.stage === 2, alt > 35000);
+            spawnExhaustParticles(currentNozzlePos, thrustDir, rocket.throttle || 1.0, isS2, alt > 35000);
             if (rocketLight) { rocketLight.position.copy(currentNozzlePos); rocketLight.intensity = 7.0; }
         } else {
             if (rocketLight) rocketLight.intensity = 0.0;
@@ -972,7 +973,6 @@ function gameLoop(now) {
     } else {
         stopRocketRumble();
         if (rocketGroup && !rocket) { rocketGroup.quaternion.set(0, 0, 0, 1); rocketGroup.position.set(0, 1000.4, 0); }
-        if (machConeMesh) machConeMesh.visible = false;
         if (rocketLight) rocketLight.intensity = 0.0;
     }
 
