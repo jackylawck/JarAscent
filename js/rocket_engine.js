@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 場景、真實殘骸彈道物理與特效管線
+ * js/rocket_engine.js - 3D 渲染與真實動態粒子尾焰管線
  * @license MIT
  */
 
@@ -9,11 +9,11 @@ import { ROCKET_MODELS } from './rockets_data.js';
 import { MU, R_EARTH, R_MOON, WORLD_SCALE, getMoonPosition } from './physics_core.js';
 
 export let scene, camera, renderer, controls;
-export let rocketGroup, flameMesh, machConeMesh, exhaustParticles = [];
-export let activeRocketParts = null;
+export let rocketGroup, activeRocketParts = null;
 export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLight;
 export let debrisList = [];
 export let explosionParticles = [];
+export let exhaustParticles = [];
 export let starFieldMesh = null;
 
 function createEarthTexture() {
@@ -85,24 +85,6 @@ export function switchRocketMesh(type) {
 
     activeRocketParts = createRocketMesh(type);
     rocketGroup.add(activeRocketParts.root);
-
-    // 火箭尾焰 (修正朝向與原點)
-    const flameGeo = new THREE.ConeGeometry(0.55, 6.0, 24);
-    flameGeo.translate(0, -3.0, 0); // 頂點在0，向-Y延伸
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
-    flameMesh = new THREE.Mesh(flameGeo, flameMat);
-    flameMesh.visible = false;
-    rocketGroup.add(flameMesh);
-
-    // 音障錐 (修復)
-    const coneGeo = new THREE.ConeGeometry(2.5, 3.5, 32, 1, true);
-    coneGeo.translate(0, -1.75, 0);
-    const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-    machConeMesh = new THREE.Mesh(coneGeo, coneMat);
-    machConeMesh.position.y = activeRocketParts.nosePosY || 9.0;
-    machConeMesh.visible = false;
-    rocketGroup.add(machConeMesh);
-
     rocketGroup.quaternion.set(0, 0, 0, 1);
     rocketGroup.visible = true;
 }
@@ -168,8 +150,6 @@ export function initRocketScene(containerEl) {
     scene.add(rocketGroup);
 
     switchRocketMesh("CZ10A");
-    
-    // ✅ 已移除所有 ArrowHelpers (綠色與橙色箭頭)
 }
 
 function buildLaunchPadAndTower() {
@@ -202,7 +182,6 @@ function buildLaunchPadAndTower() {
 export function triggerCatastrophicExplosion(pos) {
     if (!rocketGroup) return;
     rocketGroup.visible = false;
-    if (flameMesh) flameMesh.visible = false;
 
     for (let i = 0; i < 160; i++) {
         const size = 0.6 + Math.random() * 1.6;
@@ -241,23 +220,20 @@ export function updateExplosion(dt) {
     }
 }
 
-// 🌍 真實彈道物理與殘骸渲染
+// 殘骸真實重力下墜物理系統
 export function spawnDebrisPiece(state, mesh, relativeImpulse) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
-    
     scene.add(debrisGroup);
 
-    // 儲存真實的 ECI 物理座標與速度 (套用相對分離衝量)
     debrisList.push({
         r: state.r.clone(),
         v: state.v.clone().add(relativeImpulse),
         mesh: debrisGroup,
-        rotQuat: rocketGroup.quaternion.clone(),
-        rotAxis: new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize(),
-        rotSpeed: 0.5 + Math.random() * 1.5,
-        life: 180 // 存活 3 分鐘
+        rotAxis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
+        rotSpeed: 0.8 + Math.random() * 1.5,
+        life: 180
     });
 }
 
@@ -266,7 +242,6 @@ export function updateDebris(dt) {
         const d = debrisList[i];
         d.life -= dt;
         
-        // 1. 真實引力與大氣阻力積分
         const rMag = d.r.length();
         const alt = rMag - R_EARTH;
         const grav = d.r.clone().multiplyScalar(-MU / (rMag * rMag * rMag));
@@ -276,25 +251,20 @@ export function updateDebris(dt) {
             const rho = 1.225 * Math.exp(-alt / 8500);
             const speed = d.v.length();
             if (speed > 1.0) {
-                // 假設殘骸質量 5000kg, 截面積 10, Cd 1.0
-                drag = d.v.clone().normalize().multiplyScalar(-0.5 * rho * speed * speed * 1.0 * 10.0 / 5000.0);
+                drag = d.v.clone().normalize().multiplyScalar(-0.5 * rho * speed * speed * 1.2 * 8.0 / 4000.0);
             }
         }
         
         d.v.add(grav.add(drag).multiplyScalar(dt));
         d.r.add(d.v.clone().multiplyScalar(dt));
         
-        // 2. 雙尺度視覺映射 (與主火箭共用同一套縮放，保證視覺比例一致不卡住)
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
         const visualPos = d.r.clone().normalize().multiplyScalar(1000 + visualAlt);
         const visualScale = (alt < 5000) ? 1.0 : Math.min(10.0, 1.0 + Math.log10(1 + (alt - 5000) / 1000) * 3.5);
         
         d.mesh.position.copy(visualPos);
         d.mesh.scale.set(visualScale, visualScale, visualScale);
-        
-        // 3. 自轉
-        d.rotQuat.multiply(new THREE.Quaternion().setFromAxisAngle(d.rotAxis, d.rotSpeed * dt));
-        d.mesh.quaternion.copy(d.rotQuat);
+        d.mesh.rotateOnAxis(d.rotAxis, d.rotSpeed * dt);
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
             scene.remove(d.mesh);
@@ -303,31 +273,46 @@ export function updateDebris(dt) {
     }
 }
 
-export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
-    if (exhaustParticles.length > 250) return;
+// 🚀 動態真實發射尾焰（一級橘紅大氣火焰 / 二級深藍真空羽流）
+export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2 = false, isHighAlt = false) {
+    if (exhaustParticles.length > 300) return;
     
-    const count = isLowAltitude ? 5 : 2;
-    const spread = isLowAltitude ? 2.0 : 0.8;
-    const windDir = new THREE.Vector3(0.2, 0, -0.1).normalize();
+    const count = isStage2 ? 4 : 8;
+    const spread = isHighAlt ? 1.8 : 0.6; // 高空真空羽流會向外膨脹
+    const baseSpeed = isStage2 ? 14 : 20;
 
     for (let i = 0; i < count; i++) {
-        const isFire = Math.random() < 0.5;
-        const size = isLowAltitude ? (0.25 + Math.random() * 0.35) : (0.12 + Math.random() * 0.18);
+        let colorHex = 0xff6600;
+        if (isStage2) {
+            colorHex = Math.random() > 0.4 ? 0x38bdf8 : 0x818cf8; // 二級液氫液氧/甲烷藍紫光
+        } else {
+            colorHex = Math.random() > 0.3 ? 0xff5500 : (Math.random() > 0.5 ? 0xfbbf24 : 0xffffff);
+        }
+
+        const size = (isStage2 ? 0.25 : 0.4) + Math.random() * 0.3;
         const p = new THREE.Mesh(
             new THREE.SphereGeometry(size, 6, 6),
-            new THREE.MeshBasicMaterial({ color: isFire ? 0xff6600 : 0xcccccc, transparent: true, opacity: 0.85 })
+            new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 })
         );
 
-        p.position.set(pos.x + (Math.random() - 0.5) * 0.3, pos.y - 0.5, pos.z + (Math.random() - 0.5) * 0.3);
+        p.position.copy(nozzleWorldPos).add(new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3,
+            (Math.random() - 0.5) * 0.3,
+            (Math.random() - 0.5) * 0.3
+        ));
         scene.add(p);
+
+        // 沿著反推力方向高速噴射
+        const ejectDir = thrustDir.clone().negate();
+        ejectDir.x += (Math.random() - 0.5) * spread;
+        ejectDir.z += (Math.random() - 0.5) * spread;
+        ejectDir.normalize();
 
         exhaustParticles.push({
             mesh: p,
-            vx: (Math.random() - 0.5) * spread + windDir.x * 0.8,
-            vy: -(4 + Math.random() * 5) * power,
-            vz: (Math.random() - 0.5) * spread + windDir.z * 0.8,
-            expansion: 1.04,
-            life: 0.8
+            vel: ejectDir.multiplyScalar(baseSpeed * power),
+            expansion: isHighAlt ? 1.08 : 1.03,
+            life: isStage2 ? 0.45 : 0.75
         });
     }
 }
@@ -335,7 +320,7 @@ export function spawnExhaustParticles(pos, power, isLowAltitude = true) {
 export function updateExhaustParticles(dt) {
     for (let i = exhaustParticles.length - 1; i >= 0; i--) {
         const p = exhaustParticles[i];
-        p.mesh.position.add(new THREE.Vector3(p.vx, p.vy, p.vz).multiplyScalar(dt));
+        p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
         p.mesh.scale.multiplyScalar(p.expansion);
         p.life -= dt * 2.0;
         p.mesh.material.opacity = Math.max(0, p.life);
