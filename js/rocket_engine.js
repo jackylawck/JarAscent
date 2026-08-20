@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 渲染與真實動態粒子尾焰管線
+ * js/rocket_engine.js - 3D 渲染與真實動態粒子尾焰管線 (純粒子無實體錐)
  * @license MIT
  */
 
@@ -220,8 +220,8 @@ export function updateExplosion(dt) {
     }
 }
 
-// 殘骸真實重力下墜物理系統
-export function spawnDebrisPiece(state, mesh, relativeImpulse) {
+// 🌍 真實氣動阻尼分離（不再像風車亂轉）
+export function spawnDebrisPiece(state, mesh, relativeImpulse, pitchTiltAxis = null) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
@@ -231,8 +231,9 @@ export function spawnDebrisPiece(state, mesh, relativeImpulse) {
         r: state.r.clone(),
         v: state.v.clone().add(relativeImpulse),
         mesh: debrisGroup,
-        rotAxis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
-        rotSpeed: 0.8 + Math.random() * 1.5,
+        tiltAxis: pitchTiltAxis || new THREE.Vector3(1, 0, 0),
+        tiltAngle: 0,
+        pitchRate: 0.15, // 緩慢仰俯（符合真實氣動翻滾）
         life: 180
     });
 }
@@ -260,11 +261,13 @@ export function updateDebris(dt) {
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
         const visualPos = d.r.clone().normalize().multiplyScalar(1000 + visualAlt);
-        const visualScale = (alt < 5000) ? 1.0 : Math.min(10.0, 1.0 + Math.log10(1 + (alt - 5000) / 1000) * 3.5);
         
         d.mesh.position.copy(visualPos);
-        d.mesh.scale.set(visualScale, visualScale, visualScale);
-        d.mesh.rotateOnAxis(d.rotAxis, d.rotSpeed * dt);
+        
+        // 平緩真實翻滾
+        d.tiltAngle += d.pitchRate * dt;
+        d.mesh.quaternion.copy(rocketGroup.quaternion);
+        d.mesh.rotateOnAxis(d.tiltAxis, d.tiltAngle);
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
             scene.remove(d.mesh);
@@ -273,36 +276,32 @@ export function updateDebris(dt) {
     }
 }
 
-// 🚀 動態真實發射尾焰（一級橘紅大氣火焰 / 二級深藍真空羽流）
+// 🚀 動態真實發射尾焰（一級橘紅烈焰 / 二級深藍真空羽流）
 export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2 = false, isHighAlt = false) {
     if (exhaustParticles.length > 300) return;
     
     const count = isStage2 ? 4 : 8;
-    const spread = isHighAlt ? 1.8 : 0.6; // 高空真空羽流會向外膨脹
-    const baseSpeed = isStage2 ? 14 : 20;
+    const spread = isHighAlt ? 1.6 : 0.5;
+    const baseSpeed = isStage2 ? 14 : 22;
 
     for (let i = 0; i < count; i++) {
-        let colorHex = 0xff6600;
-        if (isStage2) {
-            colorHex = Math.random() > 0.4 ? 0x38bdf8 : 0x818cf8; // 二級液氫液氧/甲烷藍紫光
-        } else {
-            colorHex = Math.random() > 0.3 ? 0xff5500 : (Math.random() > 0.5 ? 0xfbbf24 : 0xffffff);
-        }
+        let colorHex = isStage2 
+            ? (Math.random() > 0.4 ? 0x38bdf8 : 0x818cf8) 
+            : (Math.random() > 0.3 ? 0xff5500 : (Math.random() > 0.5 ? 0xfbbf24 : 0xffffff));
 
-        const size = (isStage2 ? 0.25 : 0.4) + Math.random() * 0.3;
+        const size = (isStage2 ? 0.22 : 0.38) + Math.random() * 0.25;
         const p = new THREE.Mesh(
             new THREE.SphereGeometry(size, 6, 6),
             new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 })
         );
 
         p.position.copy(nozzleWorldPos).add(new THREE.Vector3(
-            (Math.random() - 0.5) * 0.3,
-            (Math.random() - 0.5) * 0.3,
-            (Math.random() - 0.5) * 0.3
+            (Math.random() - 0.5) * 0.25,
+            (Math.random() - 0.5) * 0.25,
+            (Math.random() - 0.5) * 0.25
         ));
         scene.add(p);
 
-        // 沿著反推力方向高速噴射
         const ejectDir = thrustDir.clone().negate();
         ejectDir.x += (Math.random() - 0.5) * spread;
         ejectDir.z += (Math.random() - 0.5) * spread;
@@ -312,7 +311,7 @@ export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2
             mesh: p,
             vel: ejectDir.multiplyScalar(baseSpeed * power),
             expansion: isHighAlt ? 1.08 : 1.03,
-            life: isStage2 ? 0.45 : 0.75
+            life: isStage2 ? 0.4 : 0.7
         });
     }
 }
@@ -322,7 +321,7 @@ export function updateExhaustParticles(dt) {
         const p = exhaustParticles[i];
         p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
         p.mesh.scale.multiplyScalar(p.expansion);
-        p.life -= dt * 2.0;
+        p.life -= dt * 2.2;
         p.mesh.material.opacity = Math.max(0, p.life);
         if (p.life <= 0) {
             scene.remove(p.mesh);
