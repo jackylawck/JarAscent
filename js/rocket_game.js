@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D (徹底修復全英化、按鈕多語言與結算狀態)
+ * js/rocket_game.js - JarAscent 3D (修復噴嘴對齊、自適應全箭運鏡與多語言)
  * @license MIT
  */
 
@@ -614,7 +614,7 @@ function triggerAbortSequence(visualPos, shakeAmount) {
     showMissionDebrief(getOrbitalElements(rocket));
 }
 
-// 🛰️ 資料驅動多級分離架構 (修正分離法線向量，不再左右亂飄)
+// 🛰️ 資料驅動多級分離架構
 function handleDataDrivenSeparation(rocket) {
     if (rocket.isDestroyed || !rocket.engine || !rocket.engine.separationEvents) return;
     const t = rocket.flightTime;
@@ -1229,60 +1229,82 @@ function gameLoop(now) {
         updateEnvironmentVisuals(alt);
 
         const isS2 = rocket.stage === 2;
-        const localNozzlePos = new THREE.Vector3(0, isS2 ? 5.5 : 0.1, 0);
-        const currentNozzleWorldPos = localNozzlePos.applyMatrix4(rocketGroup.matrixWorld);
-        const localFocusPos = new THREE.Vector3(0, isS2 ? 6.8 : 4.5, 0);
-        const craftFocusWorldPos = localFocusPos.applyMatrix4(rocketGroup.matrixWorld);
+
+        // 🎯 核心修復 1：精確噴嘴出口世界坐標 (消除噴焰與火箭斷層脫節)
+        // 透過 rocketGroup 矩陣變換直接轉換局部坐標，並乘以 visualScale
+        const localNozzleY = isS2 ? 0.0 : -0.2; // 嚴格對準當前級別發動機噴嘴底部邊緣
+        const currentNozzleWorldPos = new THREE.Vector3(0, localNozzleY, 0).applyMatrix4(rocketGroup.matrixWorld);
 
         const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * speed * speed / 1000);
         const dynamicQShake = Math.min(1.8, dynQkPa / 30.0);
         if (dynamicQShake > cameraShake) cameraShake = dynamicQShake;
 
+        // 🎯 核心修復 2：自適應視距與全箭質心對焦
         if (isCockpitView) {
-            const localCockpitPos = new THREE.Vector3(0, 7.8, 0.4);
+            const localCockpitPos = new THREE.Vector3(0, (isS2 ? 7.8 : 9.5), 0.45);
             const cockpitWorldPos = localCockpitPos.applyMatrix4(rocketGroup.matrixWorld);
-            const lookForwardPos = new THREE.Vector3(0, 15.0, 0.4).applyMatrix4(rocketGroup.matrixWorld);
+            const lookForwardPos = new THREE.Vector3(0, (isS2 ? 16.0 : 20.0), 0.45).applyMatrix4(rocketGroup.matrixWorld);
             camera.position.copy(cockpitWorldPos);
             camera.lookAt(lookForwardPos);
         } else if (!userInteractingWithCamera) {
             if (bulletTimeTimer <= 0) {
-                if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
-                else if (speed > 310 && speed < 440 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
-                else if (rocket.stage === 2 && alt > 150000) currentCamMode = CAM_MODE.ORBIT;
+                if (alt < 300) currentCamMode = CAM_MODE.LIFTOFF;
+                else if (speed > 300 && speed < 450 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
+                else if (rocket.stage === 2 && alt > 120000) currentCamMode = CAM_MODE.ORBIT;
                 else currentCamMode = CAM_MODE.ASCEND;
             }
 
-            const orbit = getOrbitalElements(rocket);
+            // 動態焦點鎖定火箭中央質心
+            const craftCenterWorldPos = rocketGroup.position.clone();
+            const centerOffsetHeight = (isS2 ? 4.2 : 5.0) * visualScale;
+            craftCenterWorldPos.addScaledVector(thrustDir, centerOffsetHeight);
+
+            // 視距自動隨視覺放大倍率縮放，防貼臉或丟失
+            const baseCamDist = (alt < 1500 ? (32 + alt * 0.02) : (55 + Math.log10(alt + 1) * 12)) * (visualScale * 0.45);
+
             const shakeX = (Math.random() - 0.5) * cameraShake * 1.8;
             const shakeY = (Math.random() - 0.5) * cameraShake * 1.8;
             if (cameraShake > 0) cameraShake = Math.max(0, cameraShake - dt * 0.7);
 
             switch (currentCamMode) {
                 case CAM_MODE.LIFTOFF:
-                    targetCamPos.copy(craftFocusWorldPos.clone().add(new THREE.Vector3(-14 + shakeX, 4 + shakeY, 14)));
-                    targetLookAt.copy(craftFocusWorldPos); break;
+                    targetCamPos.copy(craftCenterWorldPos.clone().add(new THREE.Vector3(-18 + shakeX, -2 + shakeY, 22)));
+                    targetLookAt.copy(craftCenterWorldPos);
+                    break;
                 case CAM_MODE.MAX_Q:
-                    targetCamPos.copy(craftFocusWorldPos.clone().add(new THREE.Vector3(26 + shakeX, 3 + shakeY, 0)));
-                    targetLookAt.copy(craftFocusWorldPos); break;
+                    targetCamPos.copy(craftCenterWorldPos.clone().add(new THREE.Vector3(baseCamDist * 1.1 + shakeX, 0 + shakeY, baseCamDist * 0.6)));
+                    targetLookAt.copy(craftCenterWorldPos);
+                    break;
                 case CAM_MODE.STAGE_SEP:
-                    targetCamPos.copy(craftFocusWorldPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), -2, 12 * Math.sin(now * 0.002))));
-                    targetLookAt.copy(craftFocusWorldPos); break;
+                    const angle = now * 0.0015;
+                    targetCamPos.copy(craftCenterWorldPos.clone().add(new THREE.Vector3(
+                        baseCamDist * Math.cos(angle),
+                        baseCamDist * 0.2,
+                        baseCamDist * Math.sin(angle)
+                    )));
+                    targetLookAt.copy(craftCenterWorldPos);
+                    break;
                 case CAM_MODE.ORBIT:
-                    const safeA = (orbit && !isNaN(orbit.semiMajorAxis) && orbit.semiMajorAxis > 0) ? orbit.semiMajorAxis : 6678137;
-                    const orbitCamDist = Math.max(400, safeA * WORLD_SCALE * 1.1);
-                    targetCamPos.copy(craftFocusWorldPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.4, orbitCamDist)));
-                    targetLookAt.set(0, 0, 0); break;
+                    const orbitCamDist = Math.max(500, (R_EARTH + alt) * WORLD_SCALE * 1.15);
+                    targetCamPos.copy(craftCenterWorldPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.35, orbitCamDist * 0.85)));
+                    targetLookAt.copy(craftCenterWorldPos);
+                    break;
                 case CAM_MODE.ASCEND:
                 default:
-                    let camDist = (alt < 2000) ? 22 + alt * 0.012 : 50;
-                    targetCamPos.copy(craftFocusWorldPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.15 + shakeY, camDist * 0.75)));
-                    targetLookAt.copy(craftFocusWorldPos); break;
+                    targetCamPos.copy(craftCenterWorldPos.clone().add(new THREE.Vector3(
+                        baseCamDist * 0.45 + shakeX,
+                        -baseCamDist * 0.25 + shakeY,
+                        baseCamDist * 0.95
+                    )));
+                    targetLookAt.copy(craftCenterWorldPos);
+                    break;
             }
 
             camera.position.lerp(targetCamPos, 0.08); 
-            controls.target.lerp(targetLookAt, 0.1);
+            controls.target.lerp(targetLookAt, 0.12);
         } else {
-            controls.target.copy(craftFocusWorldPos);
+            const manualFocusPos = rocketGroup.position.clone().addScaledVector(thrustDir, (isS2 ? 4.2 : 5.0) * visualScale);
+            controls.target.copy(manualFocusPos);
         }
 
         if (thrustMag > 1000) {
