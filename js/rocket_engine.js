@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 渲染、場景構建與視覺特效 (修復尾焰與分體結構)
+ * js/rocket_engine.js - 3D 場景、物理分離運動與特效管線
  * @license MIT
  */
 
@@ -58,9 +58,7 @@ export function updateEnvironmentVisuals(alt) {
     const spaceColor = new THREE.Color(0x020617);
     scene.background = skyColor.clone().lerp(spaceColor, ratio);
     scene.fog.density = 0.0003 * (1.0 - ratio);
-    if (starFieldMesh) {
-        starFieldMesh.material.opacity = ratio * 0.9;
-    }
+    if (starFieldMesh) starFieldMesh.material.opacity = ratio * 0.9;
 }
 
 export function setEnvironmentMode(mode) {
@@ -89,15 +87,15 @@ export function switchRocketMesh(type) {
     activeRocketParts = createRocketMesh(type);
     rocketGroup.add(activeRocketParts.root);
 
-    // 🔥 修復尾焰幾何體與朝向：頂點在 (0, 0, 0)，向下 (-Y) 延伸
-    const flameGeo = new THREE.ConeGeometry(0.45, 4.0, 24);
-    flameGeo.translate(0, -2.0, 0);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
+    // 火箭尾焰
+    const flameGeo = new THREE.ConeGeometry(0.45, 4.2, 24);
+    flameGeo.translate(0, -2.1, 0);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.95 });
     flameMesh = new THREE.Mesh(flameGeo, flameMat);
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    // 💨 音障蒸氣錐
+    // 音障錐
     const coneGeo = new THREE.ConeGeometry(1.8, 2.5, 32, 1, true);
     coneGeo.translate(0, -1.25, 0);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -266,11 +264,17 @@ export function updateExplosion(dt) {
     }
 }
 
+// 實體部件脫離與獨立運動派生
 export function spawnDebrisPiece(state, mesh, relVel) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
-    debrisGroup.position.copy(state.r.clone().normalize().multiplyScalar(1000 + ((state.r.length() - R_EARTH) * 0.035)));
+    
+    const alt = Math.max(0, state.r.length() - R_EARTH);
+    const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
+    const visualPos = state.r.clone().normalize().multiplyScalar(1000 + visualAlt);
+    
+    debrisGroup.position.copy(visualPos);
     debrisGroup.quaternion.copy(rocketGroup.quaternion);
     scene.add(debrisGroup);
 
@@ -278,7 +282,9 @@ export function spawnDebrisPiece(state, mesh, relVel) {
         r: state.r.clone(),
         v: state.v.clone().add(relVel),
         mesh: debrisGroup,
-        life: 120
+        rotSpeedX: (Math.random() - 0.5) * 2.0,
+        rotSpeedZ: (Math.random() - 0.5) * 2.0,
+        life: 60
     });
 }
 
@@ -292,10 +298,12 @@ export function updateDebris(dt) {
         d.r.add(d.v.clone().multiplyScalar(dt));
         
         const alt = Math.max(0, d.r.length() - R_EARTH);
-        const visualPos = d.r.clone().normalize().multiplyScalar(1000 + (alt * 0.035));
+        const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
+        const visualPos = d.r.clone().normalize().multiplyScalar(1000 + visualAlt);
+        
         d.mesh.position.copy(visualPos);
-        d.mesh.rotation.x += dt * 0.5;
-        d.mesh.rotation.z += dt * 0.3;
+        d.mesh.rotation.x += dt * d.rotSpeedX;
+        d.mesh.rotation.z += dt * d.rotSpeedZ;
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
             scene.remove(d.mesh);
