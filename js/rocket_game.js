@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (整合 Web Audio 程序化航天音效 + 語音廣播)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (雙層高臨場感音效與多級實體分離)
  * @license MIT
  */
 
@@ -44,10 +44,12 @@ let targetLookAt = new THREE.Vector3();
 
 let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: false, orbit: false };
 
-// ==================== 🔊 WEB AUDIO 程序化航天音效系統 ====================
+// ==================== 🔊 雙層高臨場感航天音頻引擎 ====================
 let audioCtx = null;
-let rocketRumbleNode = null;
-let rocketGainNode = null;
+let rocketNoiseSource = null;
+let rocketSubOsc = null;
+let mainThrustGain = null;
+let subThrustGain = null;
 
 function initAudioContext() {
     if (!audioCtx) {
@@ -58,14 +60,14 @@ function initAudioContext() {
     }
 }
 
-// 1. 倒數警報短嗶聲
+// 倒數嗶聲
 function playBeepSound(freq = 880, duration = 0.1) {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
@@ -73,10 +75,11 @@ function playBeepSound(freq = 880, duration = 0.1) {
     osc.stop(audioCtx.currentTime + duration);
 }
 
-// 2. 啟動持續火箭低頻咆哮引擎聲 (Brownian Noise Generator)
+// 雙層火箭發動機轟鳴 (60Hz次低音 + 布朗噪音破空)
 function startRocketRumble() {
-    if (!audioCtx || rocketRumbleNode) return;
+    if (!audioCtx || rocketNoiseSource) return;
 
+    // 1. 布朗/粉紅大氣破空噪音
     const bufferSize = audioCtx.sampleRate * 2;
     const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -85,65 +88,83 @@ function startRocketRumble() {
         const white = Math.random() * 2 - 1;
         output[i] = (lastOut + (0.02 * white)) / 1.02;
         lastOut = output[i];
-        output[i] *= 3.5;
+        output[i] *= 4.0;
     }
 
-    rocketRumbleNode = audioCtx.createBufferSource();
-    rocketRumbleNode.buffer = noiseBuffer;
-    rocketRumbleNode.loop = true;
+    rocketNoiseSource = audioCtx.createBufferSource();
+    rocketNoiseSource.buffer = noiseBuffer;
+    rocketNoiseSource.loop = true;
 
-    // 低通濾波器模擬深沉引擎咆哮
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(180, audioCtx.currentTime);
+    const noiseFilter = audioCtx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(220, audioCtx.currentTime);
 
-    rocketGainNode = audioCtx.createGain();
-    rocketGainNode.gain.setValueAtTime(0.0, audioCtx.currentTime);
-    rocketGainNode.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 1.5);
+    mainThrustGain = audioCtx.createGain();
+    mainThrustGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    mainThrustGain.gain.linearRampToValueAtTime(0.6, audioCtx.currentTime + 0.8);
 
-    rocketRumbleNode.connect(filter);
-    filter.connect(rocketGainNode);
-    rocketGainNode.connect(audioCtx.destination);
-    rocketRumbleNode.start();
+    rocketNoiseSource.connect(noiseFilter);
+    noiseFilter.connect(mainThrustGain);
+    mainThrustGain.connect(audioCtx.destination);
+    rocketNoiseSource.start();
+
+    // 2. 超重型次低音振盪器 (65 Hz 震顫衝擊)
+    rocketSubOsc = audioCtx.createOscillator();
+    rocketSubOsc.type = 'sawtooth';
+    rocketSubOsc.frequency.setValueAtTime(55, audioCtx.currentTime);
+
+    const subFilter = audioCtx.createBiquadFilter();
+    subFilter.type = 'lowpass';
+    subFilter.frequency.setValueAtTime(100, audioCtx.currentTime);
+
+    subThrustGain = audioCtx.createGain();
+    subThrustGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    subThrustGain.gain.linearRampToValueAtTime(0.35, audioCtx.currentTime + 0.8);
+
+    rocketSubOsc.connect(subFilter);
+    subFilter.connect(subThrustGain);
+    subThrustGain.connect(audioCtx.destination);
+    rocketSubOsc.start();
 }
 
 function updateRocketRumble(alt, thrustRatio) {
-    if (!rocketGainNode || !audioCtx) return;
-    // 隨高度上升出大氣層（>80km），太空中聲音逐漸衰減變靜
+    if (!mainThrustGain || !audioCtx) return;
     const atmoRatio = Math.max(0, 1.0 - (alt / 80000));
-    const targetGain = thrustRatio * atmoRatio * 0.45;
-    rocketGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+    const targetGain = thrustRatio * atmoRatio * 0.65;
+    mainThrustGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+    if (subThrustGain) {
+        subThrustGain.gain.setTargetAtTime(targetGain * 0.5, audioCtx.currentTime, 0.1);
+    }
 }
 
 function stopRocketRumble() {
-    if (rocketGainNode && audioCtx) {
-        rocketGainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+    if (mainThrustGain && audioCtx) {
+        mainThrustGain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        if (subThrustGain) subThrustGain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
         setTimeout(() => {
-            if (rocketRumbleNode) {
-                try { rocketRumbleNode.stop(); } catch(e){}
-                rocketRumbleNode = null;
-            }
+            if (rocketNoiseSource) { try { rocketNoiseSource.stop(); } catch(e){} rocketNoiseSource = null; }
+            if (rocketSubOsc) { try { rocketSubOsc.stop(); } catch(e){} rocketSubOsc = null; }
         }, 500);
     }
 }
 
-// 3. 爆炸螺栓部件分離清脆爆破聲
+// 爆炸螺栓級間分離聲
 function playStagingSound() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(320, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.25);
+    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.3);
+    osc.stop(audioCtx.currentTime + 0.25);
 }
 
-// 4. 災難性爆炸解體巨響 (Crash Boom)
+// 災難性爆炸解體巨響
 function playExplosionSound() {
     if (!audioCtx) return;
     const bufferSize = audioCtx.sampleRate * 1.5;
@@ -157,11 +178,11 @@ function playExplosionSound() {
     
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(260, audioCtx.currentTime);
+    filter.frequency.setValueAtTime(280, audioCtx.currentTime);
     filter.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 1.2);
 
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.9, audioCtx.currentTime);
+    gain.gain.setValueAtTime(1.0, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
 
     noise.connect(filter);
@@ -170,11 +191,10 @@ function playExplosionSound() {
     noise.start();
 }
 
-// ==================== 🎙️ 語音合成廣播引擎 ====================
+// 語音播報
 function speakMissionCallout(text, lang = currentLang) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.1;
     utterance.pitch = 1.0;
@@ -219,7 +239,7 @@ const I18N = {
             numbers: ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"],
             ignition: "點火，起飛！",
             escape: "逃逸塔分離！",
-            boosters: "一級分離！",
+            boosters: "一級分離！二級點火！",
             fairing: "整流罩分離！",
             orbit: "入軌圓滿成功！太陽翼展開！",
             abort: "警告，結構異常，任務中止！"
@@ -261,7 +281,7 @@ const I18N = {
             numbers: ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"],
             ignition: "Main engine ignition... Liftoff!",
             escape: "Launch escape tower jettison confirmed.",
-            boosters: "Stage one separation confirmed.",
+            boosters: "Stage one separation confirmed. Stage two ignition.",
             fairing: "Fairing separation confirmed.",
             orbit: "Orbital insertion nominal! Mission successful!",
             abort: "Warning! Structural failure. Mission abort!"
@@ -278,7 +298,6 @@ function showMilestone(text, color) {
     el.innerText = text; document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
 }
 
-// 🖨️ 3D 打印 STL 幾何運算
 function computeSTLProperties(geometry) {
     const pos = geometry.attributes.position.array;
     let volume = 0;
@@ -505,17 +524,18 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
-// 🛰️ 真實多級分離時序 + 爆破音效 + 語音廣播
+// 實體多級分離時序
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
     const sp = I18N[currentLang].speech;
 
+    // 1. T+20s: 拋逃逸塔
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
-            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 40, 0));
+            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 45, 0));
             activeRocketParts.escapeTower.visible = false;
         }
         playStagingSound();
@@ -523,13 +543,21 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.escape);
     }
 
+    // 2. T+45s: 一級芯級與助推器實體脫落，露出二級
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
+        
+        // 脫落一級芯級與助推器
+        if (activeRocketParts && activeRocketParts.stage1) {
+            spawnDebrisPiece(rocket, activeRocketParts.stage1, new THREE.Vector3(0, -35, 0));
+            activeRocketParts.stage1.visible = false;
+        }
         if (activeRocketParts && activeRocketParts.boosters) {
-            spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(15, -30, 15));
+            spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(12, -30, 12));
             activeRocketParts.boosters.visible = false;
         }
+
         playStagingSound();
         bulletTimeTimer = 2.5;
         currentCamMode = CAM_MODE.STAGE_SEP;
@@ -537,13 +565,19 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.boosters);
     }
 
+    // 3. T+60s: 整流罩分離向兩側拋出
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
+        if (activeRocketParts && activeRocketParts.fairing) {
+            spawnDebrisPiece(rocket, activeRocketParts.fairing, new THREE.Vector3(20, -10, 0));
+            activeRocketParts.fairing.visible = false;
+        }
         playStagingSound();
         showMilestone(ms.fairing, "#38bdf8");
         speakMissionCallout(sp.fairing);
     }
 
+    // 4. T+110s: 二級入軌
     if (t >= 110 && !rocket.stage2Separated) {
         rocket.stage2Separated = true;
         rocket.missionAccomplished = true;
@@ -633,7 +667,6 @@ function showMissionDebrief(orbit) {
     }
 }
 
-// 🎙️ 倒數警報音效 + 語音廣播
 function startCountdownSequence() {
     if (isCountingDown) return;
     isCountingDown = true; countdownTime = 10;
@@ -651,9 +684,8 @@ function startCountdownSequence() {
         countdownTime--;
         document.getElementById('countdown-timer').innerText = `T-${countdownTime}`;
         
-        // 最後 3 秒播放高頻倒數嗶聲
         if (countdownTime <= 3 && countdownTime > 0) {
-            playBeepSound(1200, 0.12);
+            playBeepSound(1200, 0.15);
         } else if (countdownTime > 3) {
             playBeepSound(700, 0.08);
         }
@@ -702,7 +734,7 @@ function executeLiftoff() {
     rocket.throttle = throttle;
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
-    cameraShake = 2.0;
+    cameraShake = 2.5;
     updateStatus(I18N[currentLang].liftoff, "#38bdf8");
 }
 
@@ -779,7 +811,6 @@ function gameLoop(now) {
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
         const speed = rocket.v.length();
         
-        // 🔊 即時根據海拔與推力調整引擎轟鳴音效
         const thrustMag = rocket.getThrustVector().length();
         updateRocketRumble(alt, thrustMag > 0 ? (rocket.throttle || 1.0) : 0.0);
 
