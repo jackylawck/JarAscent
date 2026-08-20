@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (雙層高臨場感音效與多級實體分離)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (無箭頭干擾、真實彈道多級分離與雙層航天音效)
  * @license MIT
  */
 
@@ -17,7 +17,7 @@ import {
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles,
     scene, camera, controls, renderer, rocketGroup, flameMesh,
-    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight, velArrow, thrustArrow
+    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -79,7 +79,6 @@ function playBeepSound(freq = 880, duration = 0.1) {
 function startRocketRumble() {
     if (!audioCtx || rocketNoiseSource) return;
 
-    // 1. 布朗/粉紅大氣破空噪音
     const bufferSize = audioCtx.sampleRate * 2;
     const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -108,7 +107,6 @@ function startRocketRumble() {
     mainThrustGain.connect(audioCtx.destination);
     rocketNoiseSource.start();
 
-    // 2. 超重型次低音振盪器 (65 Hz 震顫衝擊)
     rocketSubOsc = audioCtx.createOscillator();
     rocketSubOsc.type = 'sawtooth';
     rocketSubOsc.frequency.setValueAtTime(55, audioCtx.currentTime);
@@ -524,18 +522,24 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
-// 實體多級分離時序
+// 🛰️ 真實多級分離時序 + 衝量向量計算
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
     const ms = I18N[currentLang].milestones;
     const sp = I18N[currentLang].speech;
 
-    // 1. T+20s: 拋逃逸塔
+    const forwardVec = rocket.thrustDir.clone().normalize();
+    const upVec = rocket.r.clone().normalize();
+    let lateralVec = new THREE.Vector3().crossVectors(forwardVec, upVec).normalize();
+    if (lateralVec.lengthSq() < 0.1) lateralVec.set(1, 0, 0);
+
+    // 1. T+20s: 拋逃逸塔 (向前彈射)
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
-            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, new THREE.Vector3(0, 45, 0));
+            const escapeImpulse = forwardVec.clone().multiplyScalar(30.0);
+            spawnDebrisPiece(rocket, activeRocketParts.escapeTower, escapeImpulse);
             activeRocketParts.escapeTower.visible = false;
         }
         playStagingSound();
@@ -543,18 +547,19 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.escape);
     }
 
-    // 2. T+45s: 一級芯級與助推器實體脫落，露出二級
+    // 2. T+45s: 一級芯級與助推器脫落 (向後下方拋棄)
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
         
-        // 脫落一級芯級與助推器
+        const retroImpulse = forwardVec.clone().multiplyScalar(-6.0);
         if (activeRocketParts && activeRocketParts.stage1) {
-            spawnDebrisPiece(rocket, activeRocketParts.stage1, new THREE.Vector3(0, -35, 0));
+            spawnDebrisPiece(rocket, activeRocketParts.stage1, retroImpulse);
             activeRocketParts.stage1.visible = false;
         }
         if (activeRocketParts && activeRocketParts.boosters) {
-            spawnDebrisPiece(rocket, activeRocketParts.boosters, new THREE.Vector3(12, -30, 12));
+            const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(6.0));
+            spawnDebrisPiece(rocket, activeRocketParts.boosters, outImpulse);
             activeRocketParts.boosters.visible = false;
         }
 
@@ -565,13 +570,19 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.boosters);
     }
 
-    // 3. T+60s: 整流罩分離向兩側拋出
+    // 3. T+60s: 整流罩分離 (蚌殼式向左右兩側炸開)
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
-        if (activeRocketParts && activeRocketParts.fairing) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairing, new THREE.Vector3(20, -10, 0));
-            activeRocketParts.fairing.visible = false;
+        
+        if (activeRocketParts && activeRocketParts.fairingL) {
+            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-12.0));
+            activeRocketParts.fairingL.visible = false;
         }
+        if (activeRocketParts && activeRocketParts.fairingR) {
+            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(12.0));
+            activeRocketParts.fairingR.visible = false;
+        }
+
         playStagingSound();
         showMilestone(ms.fairing, "#38bdf8");
         speakMissionCallout(sp.fairing);
@@ -874,10 +885,6 @@ function gameLoop(now) {
             if (rocketLight) rocketLight.intensity = 0.0;
         }
         
-        velArrow.position.copy(visualPos); velArrow.setDirection(rocket.v.clone().normalize()); velArrow.setLength(15);
-        thrustArrow.position.copy(visualPos); thrustArrow.setDirection(thrustDir); thrustArrow.setLength(10);
-        velArrow.visible = (alt > 2000); thrustArrow.visible = (alt > 2000 && thrustMag > 0);
-
         updatePredictedOrbit(rocket);
         updateTelemetryValues();
     } else {
