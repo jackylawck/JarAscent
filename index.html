@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
     
-    <!-- ✅ 加入 ICON 支援 -->
+    <!-- ✅ PWA & 瀏覽器圖標 -->
     <link rel="icon" type="image/png" sizes="192x192" href="JarAscenticon-192.png">
     <link rel="apple-touch-icon" href="JarAscenticon-192.png">
     
@@ -38,6 +38,17 @@
         input:checked + .slider { background-color: #ef4444; }
         input:checked + .slider:before { transform: translateX(20px); }
 
+        /* 🖨️ 3D 打印 STL 拖放上傳區樣式 */
+        .stl-drop-zone {
+            border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px;
+            text-align: center; font-size: 0.72rem; color: #94a3b8; cursor: pointer;
+            background: rgba(56, 189, 248, 0.04); margin-bottom: 8px; transition: all 0.2s ease;
+        }
+        .stl-drop-zone:hover, .stl-drop-zone.dragover {
+            border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #fff;
+        }
+        .stl-info { font-size: 0.68rem; color: #fbbf24; margin-top: 4px; display: none; line-height: 1.4; text-align: left; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; }
+
         .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 10px 12px; font-size: 0.88rem; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s; margin-top: 6px; }
         .btn:active { transform: scale(0.98); }
         .btn-reset { background: #1e293b; border: 1px solid rgba(255,255,255,0.2); }
@@ -61,7 +72,6 @@
         .gauge-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
         .gauge-bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
         .fill-q { background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444); }
-        .fill-fuel { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
         
         .debug-panel { font-family: 'Courier New', Courier, monospace; font-size: 0.72rem; color: #38bdf8; background: rgba(3, 7, 18, 0.85); padding: 8px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); margin-top: 8px; line-height: 1.4; }
         .debug-panel h4 { color: #fbbf24; margin-bottom: 4px; font-size: 0.75rem; border-bottom: 1px solid rgba(251, 191, 36, 0.3); padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
@@ -82,6 +92,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- 🖨️ 3D 打印 STL 載入解析庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 </head>
 <body>
     <div class="top-hud-bar">
@@ -119,7 +131,14 @@
                 <h1 id="ui-title">🚀 躍上穹蒼 3D</h1>
                 <button class="lang-btn" id="btn-lang">English</button>
             </div>
-            <p id="ui-subtitle">航太動力學、真實多級分離與結構極限沙盒</p>
+            <p id="ui-subtitle">航太動力學、真實多級分離與 3D 打印沙盒</p>
+
+            <!-- 🖨️ 3D 打印 STL 拖放上傳區 -->
+            <div class="stl-drop-zone" id="stl-drop-zone">
+                <span id="lbl-stl-drop">🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)</span>
+                <input type="file" id="stl-file-input" accept=".stl" style="display: none;">
+                <div class="stl-info" id="stl-info"></div>
+            </div>
 
             <div class="mode-toggle-box">
                 <span id="lbl-mode" style="font-size: 0.8rem; font-weight: bold; color: #10b981;">🟢 簡易模式 (必定成功)</span>
@@ -153,6 +172,9 @@
                         <optgroup label="🇺🇸 全球重型航天標竿" id="grp-us">
                             <option value="STARSHIP">星艦全系統 (Starship 120m)</option>
                             <option value="SATURN_V">土星五號 (Saturn V 110m)</option>
+                        </optgroup>
+                        <optgroup label="🛠️ 自定義 3D 打印型號" id="grp-custom" style="display: none;">
+                            <option value="CUSTOM_STL">自訂 3D 打印火箭 (Custom STL)</option>
                         </optgroup>
                     </select>
                 </div>
