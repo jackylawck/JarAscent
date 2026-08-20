@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (包含氣動阻尼落體、暫停 3D 自由視角與 Web Audio)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (防空指針健壯版)
  * @license MIT
  */
 
@@ -25,8 +25,8 @@ let currentLang = 'zh';
 let isAdvancedMode = false;
 let customRocketStats = null;
 
-let isPaused = false; // ⏸️ 暫停狀態
-let userInteractingWithCamera = false; // 是否正在手動旋轉 3D 鏡頭
+let isPaused = false;
+let userInteractingWithCamera = false;
 let lastTime = performance.now();
 let timeScale = 1.0;
 let orbitLine = null;
@@ -46,7 +46,7 @@ let targetLookAt = new THREE.Vector3();
 
 let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: false, orbit: false };
 
-// ==================== 🔊 雙層高臨場感航天音頻引擎 ====================
+// ==================== 🔊 音效系統 ====================
 let audioCtx = null;
 let rocketNoiseSource = null;
 let rocketSubOsc = null;
@@ -377,8 +377,10 @@ function handleSTLFile(file) {
             document.getElementById('sel-engine').value = 'CUSTOM_STL';
 
             const infoBox = document.getElementById('stl-info');
-            infoBox.style.display = 'block';
-            infoBox.innerHTML = `✅ <b>${file.name}</b> 解析成功！<br>• 乾重: ${(stats.dryMassStage1+stats.dryMassStage2)/1000}t | 起飛推力: ${(stats.thrustSea/1000).toFixed(0)}kN<br>• 截面積: ${stats.frontalArea}m² | 氣動外形已載入`;
+            if (infoBox) {
+                infoBox.style.display = 'block';
+                infoBox.innerHTML = `✅ <b>${file.name}</b> 解析成功！<br>• 乾重: ${(stats.dryMassStage1+stats.dryMassStage2)/1000}t | 起飛推力: ${(stats.thrustSea/1000).toFixed(0)}kN<br>• 截面積: ${stats.frontalArea}m² | 氣動外形已載入`;
+            }
             
             updateStatus(currentLang === 'zh' ? `✅ 自訂 3D 打印模型 [${file.name}] 裝載完成！` : `✅ Custom STL Model [${file.name}] Armed!`, "#10b981");
 
@@ -396,9 +398,12 @@ function applyLanguageUI() {
     setText('btn-toggle-ui', isUIVisible ? t.toggleUi : t.toggleUiHide);
     setText('btn-toggle-details', isDetailTelemetryVisible ? t.toggleDetailHide : t.toggleDetailShow);
     setText('lbl-mode', isAdvancedMode ? t.modeAdvanced : t.modeSimple);
-    document.getElementById('lbl-mode').style.color = isAdvancedMode ? '#ef4444' : '#10b981';
+    const modeEl = document.getElementById('lbl-mode');
+    if (modeEl) modeEl.style.color = isAdvancedMode ? '#ef4444' : '#10b981';
     
-    setText('btn-pause', isPaused ? t.btnResume : t.btnPause);
+    const pauseEl = document.getElementById('btn-pause');
+    if (pauseEl) pauseEl.innerText = isPaused ? t.btnResume : t.btnPause;
+
     setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
     setText('sub-prop', t.subProp); setText('lbl-payload', t.lblPayload); setText('lbl-fuel', t.lblFuel);
@@ -522,7 +527,6 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
-// 🛰️ 真實多級分離時序 + 衝量向量計算
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
@@ -534,7 +538,7 @@ function handleMultiStageSeparation(rocket) {
     let lateralVec = new THREE.Vector3().crossVectors(forwardVec, upVec).normalize();
     if (lateralVec.lengthSq() < 0.1) lateralVec.set(1, 0, 0);
 
-    // 1. T+20s: 拋逃逸塔 (向前加速彈射)
+    // 1. T+20s: 拋逃逸塔
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
@@ -547,7 +551,7 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.escape);
     }
 
-    // 2. T+45s: 一級芯級與助推器脫落 (向後下方拋棄)
+    // 2. T+45s: 一級芯級與助推器脫落
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
@@ -570,7 +574,7 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.boosters);
     }
 
-    // 3. T+60s: 蚌殼式整流罩分離 (左右兩側炸開)
+    // 3. T+60s: 蚌殼式整流罩分離
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
         
@@ -615,9 +619,11 @@ function updateTelemetryValues() {
     setText('hud-vel', `${speed.toFixed(0)} m/s (M${mach})`);
     
     const altEl = document.getElementById('hud-alt');
-    if (alt < 30000) altEl.style.color = '#f97316';
-    else if (alt < 100000) altEl.style.color = '#fbbf24';
-    else altEl.style.color = '#38bdf8';
+    if (altEl) {
+        if (alt < 30000) altEl.style.color = '#f97316';
+        else if (alt < 100000) altEl.style.color = '#fbbf24';
+        else altEl.style.color = '#38bdf8';
+    }
 
     const dynQkPa = (0.5 * 1.225 * Math.exp(-alt/8500) * airSpeed * airSpeed / 1000);
     const qBar = document.getElementById('gauge-q-bar');
@@ -651,28 +657,39 @@ function updateTelemetryValues() {
         setText('t-ecc', orbit.isOrbital ? orbit.eccentricity.toFixed(4) : '—');
     }
 
-    if (rocket.missionAccomplished && !milestoneShown.orbit) { milestoneShown.orbit = true; showMissionDebrief(orbit); }
+    if (rocket.missionAccomplished && !milestoneShown.orbit) { 
+        milestoneShown.orbit = true; 
+        showMissionDebrief(orbit); 
+    }
 }
 
 function showMissionDebrief(orbit) {
-    const modal = document.getElementById('debrief-modal'); if (modal.style.display === 'flex') return; modal.style.display = 'flex';
-    const periErr = Math.abs(orbit.periapsis - 300000) / 1000;
+    const modal = document.getElementById('debrief-modal'); 
+    if (!modal || modal.style.display === 'flex') return; 
+    modal.style.display = 'flex';
+
+    const periapsisVal = orbit && !isNaN(orbit.periapsis) ? orbit.periapsis : 300000;
+    const apoapsisVal = orbit && !isNaN(orbit.apoapsis) ? orbit.apoapsis : 300000;
+    const periErr = Math.abs(periapsisVal - 300000) / 1000;
+
     setText('stat-maxvel', `${rocket.maxVelocity.toFixed(1)} m/s`);
     setText('stat-maxq', `${(rocket.maxQ / 1000).toFixed(1)} kPa`);
     setText('stat-peri-err', `${periErr.toFixed(1)} km`);
-    setText('stat-orbit-alt', `${(orbit.periapsis/1000).toFixed(1)} km x ${(orbit.apoapsis/1000).toFixed(1)} km`);
+    setText('stat-orbit-alt', `${(periapsisVal/1000).toFixed(1)} km x ${(apoapsisVal/1000).toFixed(1)} km`);
     const fuelLeft = Math.round((rocket.fuel2 / (rocket.engine ? rocket.engine.fuelMassStage2 : 90000)) * 100);
     setText('stat-fuel-left', `${fuelLeft}%`);
     
+    const rankEl = document.getElementById('debrief-rank');
     if (rocket.isDestroyed) {
-        document.getElementById('debrief-rank').innerText = "FAIL"; document.getElementById('debrief-rank').style.color = "#ef4444";
-        setText('debrief-title', I18N[currentLang].abortTitle); setText('stat-status', rocket.failureReason);
-    } else if (orbit.isOrbital) {
-        document.getElementById('debrief-rank').innerText = "S"; document.getElementById('debrief-rank').style.color = "#fbbf24";
+        if (rankEl) { rankEl.innerText = "FAIL"; rankEl.style.color = "#ef4444"; }
+        setText('debrief-title', I18N[currentLang].abortTitle); 
+        setText('stat-status', rocket.failureReason || "Structural RUD");
+    } else if (orbit && orbit.isOrbital) {
+        if (rankEl) { rankEl.innerText = "S"; rankEl.style.color = "#fbbf24"; }
         setText('debrief-title', currentLang === 'zh' ? "🏆 完美入軌" : "🏆 Nominal Insertion");
         setText('stat-status', currentLang === 'zh' ? "入軌成功" : "Inserted successfully");
     } else {
-        document.getElementById('debrief-rank').innerText = "B"; document.getElementById('debrief-rank').style.color = "#94a3b8";
+        if (rankEl) { rankEl.innerText = "B"; rankEl.style.color = "#94a3b8"; }
         setText('debrief-title', currentLang === 'zh' ? "🚀 次軌道試射完成" : "🚀 Suborbital Completed");
         setText('stat-status', currentLang === 'zh' ? "入軌前燃料耗盡" : "Propellant depleted");
     }
@@ -682,7 +699,8 @@ function startCountdownSequence() {
     if (isCountingDown) return;
     isCountingDown = true; countdownTime = 10;
     initAudioContext();
-    document.getElementById('countdown-hud').style.display = 'flex';
+    const hud = document.getElementById('countdown-hud');
+    if (hud) hud.style.display = 'flex';
     
     isUIVisible = false;
     const box = document.getElementById('ui-overlay-box');
@@ -693,7 +711,7 @@ function startCountdownSequence() {
 
     const timerInterval = setInterval(() => {
         countdownTime--;
-        document.getElementById('countdown-timer').innerText = `T-${countdownTime}`;
+        setText('countdown-timer', `T-${countdownTime}`);
         
         if (countdownTime <= 3 && countdownTime > 0) {
             playBeepSound(1200, 0.15);
@@ -707,7 +725,7 @@ function startCountdownSequence() {
 
         if (countdownTime <= 0) { 
             clearInterval(timerInterval); 
-            document.getElementById('countdown-hud').style.display = 'none'; 
+            if (hud) hud.style.display = 'none'; 
             speakMissionCallout(I18N[currentLang].speech.ignition);
             startRocketRumble();
             executeLiftoff(); 
@@ -716,16 +734,26 @@ function startCountdownSequence() {
 }
 
 function executeLiftoff() {
-    let engKey = document.getElementById('sel-engine').value;
+    const selEngine = document.getElementById('sel-engine');
+    let engKey = selEngine ? selEngine.value : "CZ10A";
     
-    let payload = isAdvancedMode ? (parseInt(document.getElementById('sel-payload').value, 10) || 8000) : 8000;
-    let fuelFactor = isAdvancedMode ? ((parseInt(document.getElementById('rng-fuel').value, 10) || 100) / 100) : 1.0;
-    let throttle = isAdvancedMode ? ((parseInt(document.getElementById('rng-throttle').value, 10) || 100) / 100) : 1.0;
-    let ofRatio = isAdvancedMode ? ((parseInt(document.getElementById('rng-ofratio').value, 10) || 100) / 100) : 1.0;
-    let turnAltKm = isAdvancedMode ? (parseInt(document.getElementById('rng-turn').value, 10) || 8) : 8;
-    let tvcGain = isAdvancedMode ? ((parseInt(document.getElementById('rng-tvc').value, 10) || 100) / 100) : 1.0;
-    let windShear = isAdvancedMode ? (parseInt(document.getElementById('rng-wind').value, 10) || 0) : 0;
-    let driftNoise = isAdvancedMode ? ((parseInt(document.getElementById('rng-drift').value, 10) || 0) / 100) : 0;
+    const elPayload = document.getElementById('sel-payload');
+    const elFuel = document.getElementById('rng-fuel');
+    const elThrottle = document.getElementById('rng-throttle');
+    const elOfRatio = document.getElementById('rng-ofratio');
+    const elTurn = document.getElementById('rng-turn');
+    const elTvc = document.getElementById('rng-tvc');
+    const elWind = document.getElementById('rng-wind');
+    const elDrift = document.getElementById('rng-drift');
+
+    let payload = isAdvancedMode ? (parseInt(elPayload ? elPayload.value : 8000, 10) || 8000) : 8000;
+    let fuelFactor = isAdvancedMode ? ((parseInt(elFuel ? elFuel.value : 100, 10) || 100) / 100) : 1.0;
+    let throttle = isAdvancedMode ? ((parseInt(elThrottle ? elThrottle.value : 100, 10) || 100) / 100) : 1.0;
+    let ofRatio = isAdvancedMode ? ((parseInt(elOfRatio ? elOfRatio.value : 100, 10) || 100) / 100) : 1.0;
+    let turnAltKm = isAdvancedMode ? (parseInt(elTurn ? elTurn.value : 8, 10) || 8) : 8;
+    let tvcGain = isAdvancedMode ? ((parseInt(elTvc ? elTvc.value : 100, 10) || 100) / 100) : 1.0;
+    let windShear = isAdvancedMode ? (parseInt(elWind ? elWind.value : 0, 10) || 0) : 0;
+    let driftNoise = isAdvancedMode ? ((parseInt(elDrift ? elDrift.value : 0, 10) || 0) / 100) : 0;
 
     rocket = new RocketState();
 
@@ -750,69 +778,101 @@ function executeLiftoff() {
 }
 
 function bindUI() {
-    document.getElementById('btn-launch').onclick = startCountdownSequence;
-    document.getElementById('btn-reset').onclick = () => location.reload();
-    document.getElementById('sel-env').onchange = (e) => setEnvironmentMode(e.target.value);
-    document.getElementById('sel-engine').onchange = (e) => {
-        if (e.target.value !== 'CUSTOM_STL') switchRocketMesh(e.target.value);
-    };
-    document.getElementById('btn-lang').onclick = () => { currentLang = currentLang === 'zh' ? 'en' : 'zh'; applyLanguageUI(); };
+    const btnLaunch = document.getElementById('btn-launch');
+    if (btnLaunch) btnLaunch.onclick = startCountdownSequence;
+    
+    const btnReset = document.getElementById('btn-reset');
+    if (btnReset) btnReset.onclick = () => location.reload();
+    
+    const selEnv = document.getElementById('sel-env');
+    if (selEnv) selEnv.onchange = (e) => setEnvironmentMode(e.target.value);
+    
+    const selEngine = document.getElementById('sel-engine');
+    if (selEngine) {
+        selEngine.onchange = (e) => {
+            if (e.target.value !== 'CUSTOM_STL') switchRocketMesh(e.target.value);
+        };
+    }
 
-    document.getElementById('chk-advanced-mode').onchange = (e) => {
-        isAdvancedMode = e.target.checked;
-        document.getElementById('advanced-config').style.display = isAdvancedMode ? 'block' : 'none';
-        applyLanguageUI();
-    };
+    const btnLang = document.getElementById('btn-lang');
+    if (btnLang) {
+        btnLang.onclick = () => { currentLang = currentLang === 'zh' ? 'en' : 'zh'; applyLanguageUI(); };
+    }
 
-    // ⏸️ 暫停與自由 3D 檢視綁定
+    const chkAdv = document.getElementById('chk-advanced-mode');
+    if (chkAdv) {
+        chkAdv.onchange = (e) => {
+            isAdvancedMode = e.target.checked;
+            const advBox = document.getElementById('advanced-config');
+            if (advBox) advBox.style.display = isAdvancedMode ? 'block' : 'none';
+            applyLanguageUI();
+        };
+    }
+
     const btnPause = document.getElementById('btn-pause');
     const togglePause = () => {
         isPaused = !isPaused;
-        btnPause.innerText = isPaused ? I18N[currentLang].btnResume : I18N[currentLang].btnPause;
-        btnPause.style.background = isPaused ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.2)";
-        btnPause.style.borderColor = isPaused ? "#10b981" : "#f59e0b";
-        btnPause.style.color = isPaused ? "#34d399" : "#fbbf24";
+        if (btnPause) {
+            btnPause.innerText = isPaused ? I18N[currentLang].btnResume : I18N[currentLang].btnPause;
+            btnPause.style.background = isPaused ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.2)";
+            btnPause.style.borderColor = isPaused ? "#10b981" : "#f59e0b";
+            btnPause.style.color = isPaused ? "#34d399" : "#fbbf24";
+        }
         if (isPaused) {
             stopRocketRumble();
-            currentCamMode = CAM_MODE.FREE; // 進入自由鏡頭
+            currentCamMode = CAM_MODE.FREE;
         } else {
             if (rocket && rocket.isLaunched && !rocket.isDestroyed) startRocketRumble();
         }
     };
-    btnPause.onclick = togglePause;
+    if (btnPause) btnPause.onclick = togglePause;
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') togglePause(); });
 
-    // 監聽用戶手動操作 OrbitControls
-    controls.addEventListener('start', () => { userInteractingWithCamera = true; });
-    controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2000); });
+    if (controls) {
+        controls.addEventListener('start', () => { userInteractingWithCamera = true; });
+        controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2000); });
+    }
 
     const dropZone = document.getElementById('stl-drop-zone');
     const fileInput = document.getElementById('stl-file-input');
-    dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = (e) => { if (e.target.files.length > 0) handleSTLFile(e.target.files[0]); };
+    if (dropZone && fileInput) {
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => { if (e.target.files.length > 0) handleSTLFile(e.target.files[0]); };
 
-    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
-    dropZone.ondragleave = () => dropZone.classList.remove('dragover');
-    dropZone.ondrop = (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) handleSTLFile(e.dataTransfer.files[0]);
-    };
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) handleSTLFile(e.dataTransfer.files[0]);
+        };
+    }
 
-    document.getElementById('btn-toggle-ui').onclick = () => {
-        isUIVisible = !isUIVisible;
-        document.getElementById('ui-overlay-box').classList.toggle('collapsed', !isUIVisible);
-        setText('btn-toggle-ui', isUIVisible ? I18N[currentLang].toggleUi : I18N[currentLang].toggleUiHide);
-    };
+    const toggleUiBtn = document.getElementById('btn-toggle-ui');
+    if (toggleUiBtn) {
+        toggleUiBtn.onclick = () => {
+            isUIVisible = !isUIVisible;
+            const box = document.getElementById('ui-overlay-box');
+            if (box) box.classList.toggle('collapsed', !isUIVisible);
+            setText('btn-toggle-ui', isUIVisible ? I18N[currentLang].toggleUi : I18N[currentLang].toggleUiHide);
+        };
+    }
 
-    document.getElementById('btn-toggle-details').onclick = () => {
-        isDetailTelemetryVisible = !isDetailTelemetryVisible;
-        document.getElementById('telemetry-detail-box').style.display = isDetailTelemetryVisible ? 'block' : 'none';
-        document.getElementById('btn-toggle-details').innerText = isDetailTelemetryVisible ? I18N[currentLang].toggleDetailHide : I18N[currentLang].toggleDetailShow;
-    };
+    const detailBtn = document.getElementById('btn-toggle-details');
+    if (detailBtn) {
+        detailBtn.onclick = () => {
+            isDetailTelemetryVisible = !isDetailTelemetryVisible;
+            const detailBox = document.getElementById('telemetry-detail-box');
+            if (detailBox) detailBox.style.display = isDetailTelemetryVisible ? 'block' : 'none';
+            detailBtn.innerText = isDetailTelemetryVisible ? I18N[currentLang].toggleDetailHide : I18N[currentLang].toggleDetailShow;
+        };
+    }
 
-    document.getElementById('btn-time-slower').onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); setText('time-scale-display', `${I18N[currentLang].timeScalePrefix}${timeScale.toFixed(1)}x`); };
-    document.getElementById('btn-time-faster').onclick = () => { timeScale = Math.min(100, timeScale * 1.5); setText('time-scale-display', `${I18N[currentLang].timeScalePrefix}${timeScale.toFixed(1)}x`); };
+    const updateTimeDisplay = () => setText('time-scale-display', `${I18N[currentLang].timeScalePrefix}${timeScale.toFixed(1)}x`);
+    const btnSlower = document.getElementById('btn-time-slower');
+    if (btnSlower) btnSlower.onclick = () => { timeScale = Math.max(0.5, timeScale / 1.5); updateTimeDisplay(); };
+    const btnFaster = document.getElementById('btn-time-faster');
+    if (btnFaster) btnFaster.onclick = () => { timeScale = Math.min(100, timeScale * 1.5); updateTimeDisplay(); };
 }
 
 function gameLoop(now) {
@@ -821,9 +881,8 @@ function gameLoop(now) {
     lastTime = now;
 
     if (isPaused) {
-        // ⏸️ 暫停狀態：凍結物理計算，僅允許 3D OrbitControls 自由旋轉檢視
-        controls.update();
-        renderer.render(scene, camera);
+        if (controls) controls.update();
+        if (renderer && scene && camera) renderer.render(scene, camera);
         return;
     }
 
@@ -853,6 +912,7 @@ function gameLoop(now) {
         
         const thrustMag = rocket.getThrustVector().length();
         updateRocketRumble(alt, thrustMag > 0 ? (rocket.throttle || 1.0) : 0.0);
+
         updateEnvironmentVisuals(alt);
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
@@ -865,7 +925,6 @@ function gameLoop(now) {
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
-        // 自動導演相機 (當用戶未手動滑動視角時自動跟隨)
         if (!userInteractingWithCamera) {
             if (bulletTimeTimer <= 0) {
                 if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
@@ -890,7 +949,8 @@ function gameLoop(now) {
                     targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
                     targetLookAt.copy(visualPos); break;
                 case CAM_MODE.ORBIT:
-                    const orbitCamDist = Math.max(500, orbit.semiMajorAxis * WORLD_SCALE * 1.2);
+                    const safeA = (orbit && !isNaN(orbit.semiMajorAxis) && orbit.semiMajorAxis > 0) ? orbit.semiMajorAxis : 6678137;
+                    const orbitCamDist = Math.max(500, safeA * WORLD_SCALE * 1.2);
                     targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.5, orbitCamDist)));
                     targetLookAt.set(0, 0, 0); break;
                 case CAM_MODE.ASCEND:
@@ -903,7 +963,6 @@ function gameLoop(now) {
             camera.position.lerp(targetCamPos, 0.08); 
             controls.target.lerp(targetLookAt, 0.09);
         } else {
-            // 手動拖拽時，將 OrbitControls 中心錨定在火箭身上
             controls.target.copy(visualPos);
         }
 
@@ -929,12 +988,20 @@ function gameLoop(now) {
         if (machConeMesh) machConeMesh.visible = false;
     }
 
-    controls.update(); renderer.render(scene, camera);
+    if (controls) controls.update();
+    if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
     initRocketScene(document.getElementById('canvas-container'));
-    bindUI(); applyLanguageUI();
-    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    bindUI(); 
+    applyLanguageUI();
+    window.addEventListener('resize', () => {
+        if (camera && renderer) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    });
     gameLoop(performance.now());
 });
