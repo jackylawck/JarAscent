@@ -5,13 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#030712">
+
+    <!-- 🔍 Google 網站驗證 (若有專屬驗證碼可替換) -->
+    <meta name="google-site-verification" content="JZ5UohX-CcP_fQV0_DI9VadkKY4ZoTTkUifL88-fIcY" />
+
+    <!-- 🌐 國際與亞洲雙語 SEO 標籤 (Bilingual Global SEO) -->
+    <title>🚀 躍上穹蒼 | JarAscent - 3D Rocket & Orbital Simulator</title>
+    <meta name="description" content="JarAscent is a high-fidelity WebGL 3D Rocket Launch & Orbital Mechanics Sandbox featuring RK4 integration, J2 perturbation, 3D printing STL wind tunnel & Tiangong rendezvous. 依據真實天體力學（RK4/J2攝動/PBR）打造的 3D 運載火箭模擬器與 3D 打印航太沙盒。">
+    <meta name="keywords" content="JarAscent, Rocket Simulator, 3D Rocket Launch, Orbital Mechanics, Three.js, WebGL, RK4, J2 Perturbation, Spaceflight Sandbox, 3D Printing Rocket, 躍上穹蒼, 火箭模擬器, 軌道力學, 航天模擬, 長征十號, 星艦, 3D打印火箭, 天宮空間站交會">
+    <meta name="author" content="羅子淇 Jacky Law">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://jackylawck.github.io/JarAscent/">
+
+    <!-- 📱 全球社群分享 Open Graph (WhatsApp, Discord, Reddit, Facebook) -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://jackylawck.github.io/JarAscent/">
+    <meta property="og:title" content="🚀 躍上穹蒼 3D | JarAscent 3D">
+    <meta property="og:description" content="High-fidelity 3D Rocket Launch & Orbital Mechanics Sandbox in WebGL (Three.js + RK4 + PWA).">
+    <meta property="og:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
+
+    <!-- 🐦 Twitter Card 標籤 -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://jackylawck.github.io/JarAscent/">
+    <meta name="twitter:title" content="🚀 JarAscent 3D | Aerospace Physics Simulator">
+    <meta name="twitter:description" content="Explore real-time rocket trajectory, gravity turn, staging physics and space station rendezvous in 3D WebGL.">
+    <meta name="twitter:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
+
+    <!-- 🔍 Google 結構化資料 (Schema.org JSON-LD 全球爬蟲加速) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "JarAscent 3D",
+      "alternateName": "躍上穹蒼 3D",
+      "url": "https://jackylawck.github.io/JarAscent/",
+      "description": "A high-fidelity WebGL aerospace rocket launch and orbital mechanics simulator built with Three.js, RK4 numerical integration, J2 perturbation, and customizable 3D print STL models.",
+      "applicationCategory": "EducationalApplication, SimulationApplication",
+      "operatingSystem": "All",
+      "browserRequirements": "Requires JavaScript. Requires WebGL / HTML5.",
+      "inLanguage": ["en", "zh-HK", "zh-TW"],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Jacky Law"
+      }
+    }
+    </script>
+
+    <!-- 🛡️ CSP 安全防護 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self'; img-src 'self' data: blob:;">
+
+    <!-- PWA 與圖示設定 -->
     <link rel="manifest" href="manifest.json">
-    
     <link rel="icon" type="image/png" sizes="192x192" href="JarAscenticon-192.png">
     <link rel="apple-touch-icon" href="JarAscenticon-192.png">
-    
-    <title>🚀 躍上穹蒼 3D | JarAscent 3D (Master Edition)</title>
-    <meta name="theme-color" content="#030712">
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
@@ -311,7 +364,7 @@
             <div class="status-banner" id="flight-status">發射台準備就緒，請點擊發射...</div>
             <button class="btn" id="btn-launch">🔥 啟動 10 秒倒數發射 (Terminal T-10s)</button>
             
-            <div style="display: flex; gap: 8px; margin-6px 0; justify-content: center;">
+            <div style="display: flex; gap: 8px; margin: 6px 0; justify-content: center;">
                 <button id="btn-time-slower" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 6px 14px; min-height: 36px; border-radius: 8px; font-weight: bold; cursor: pointer;">⏪ 減速</button>
                 <span id="time-scale-display" style="color: #94a3b8; font-size: 0.8rem; align-self: center; font-weight: bold;">倍速: 1.0x</span>
                 <button id="btn-time-faster" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 6px 14px; min-height: 36px; border-radius: 8px; font-weight: bold; cursor: pointer;">加速 ⏩</button>
