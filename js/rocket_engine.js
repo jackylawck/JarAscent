@@ -1,5 +1,5 @@
 /**
- * js/rocket_engine.js - 3D 場景、物理分離運動與特效管線
+ * js/rocket_engine.js - 3D 場景、真實殘骸彈道物理與特效管線
  * @license MIT
  */
 
@@ -12,7 +12,6 @@ export let scene, camera, renderer, controls;
 export let rocketGroup, flameMesh, machConeMesh, exhaustParticles = [];
 export let activeRocketParts = null;
 export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLight;
-export let velArrow, thrustArrow;
 export let debrisList = [];
 export let explosionParticles = [];
 export let starFieldMesh = null;
@@ -87,17 +86,17 @@ export function switchRocketMesh(type) {
     activeRocketParts = createRocketMesh(type);
     rocketGroup.add(activeRocketParts.root);
 
-    // 火箭尾焰
-    const flameGeo = new THREE.ConeGeometry(0.45, 4.2, 24);
-    flameGeo.translate(0, -2.1, 0);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.95 });
+    // 火箭尾焰 (修正朝向與原點)
+    const flameGeo = new THREE.ConeGeometry(0.55, 6.0, 24);
+    flameGeo.translate(0, -3.0, 0); // 頂點在0，向-Y延伸
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
     flameMesh = new THREE.Mesh(flameGeo, flameMat);
     flameMesh.visible = false;
     rocketGroup.add(flameMesh);
 
-    // 音障錐
-    const coneGeo = new THREE.ConeGeometry(1.8, 2.5, 32, 1, true);
-    coneGeo.translate(0, -1.25, 0);
+    // 音障錐 (修復)
+    const coneGeo = new THREE.ConeGeometry(2.5, 3.5, 32, 1, true);
+    coneGeo.translate(0, -1.75, 0);
     const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     machConeMesh = new THREE.Mesh(coneGeo, coneMat);
     machConeMesh.position.y = activeRocketParts.nosePosY || 9.0;
@@ -116,7 +115,7 @@ export function initRocketScene(containerEl) {
     const width = containerEl.clientWidth || window.innerWidth;
     const height = containerEl.clientHeight || window.innerHeight;
 
-    camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 30000);
+    camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 50000);
     camera.position.set(0, 1012, 22);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -129,7 +128,7 @@ export function initRocketScene(containerEl) {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.minDistance = 2;
-    controls.maxDistance = 15000;
+    controls.maxDistance = 20000;
     controls.target.set(0, 1004, 0);
 
     scene.add(createStarField());
@@ -141,7 +140,7 @@ export function initRocketScene(containerEl) {
     hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 1.2);
     scene.add(hemiLight);
 
-    rocketLight = new THREE.PointLight(0xff6600, 0, 250);
+    rocketLight = new THREE.PointLight(0xff6600, 0, 300);
     scene.add(rocketLight);
 
     earthMesh = new THREE.Mesh(
@@ -169,56 +168,34 @@ export function initRocketScene(containerEl) {
     scene.add(rocketGroup);
 
     switchRocketMesh("CZ10A");
-
-    velArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 10, 0x00ff00);
-    thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 8, 0xff5500);
-    scene.add(velArrow); scene.add(thrustArrow);
+    
+    // ✅ 已移除所有 ArrowHelpers (綠色與橙色箭頭)
 }
 
 function buildLaunchPadAndTower() {
     launchTowerGroup = new THREE.Group();
-    
     const padMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, metalness: 0.2 });
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.8, 0.8, 32), padMat);
     pad.position.set(0, 999.6, 0);
     launchTowerGroup.add(pad);
 
-    const trenchMat = new THREE.MeshStandardMaterial({ color: 0x0a0f1d });
-    const trench = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.0, 24), trenchMat);
-    trench.position.set(0, 999.6, 0);
-    launchTowerGroup.add(trench);
-
     const towerMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.5, roughness: 0.4 });
     const tower = new THREE.Group();
-    
     const colGeo = new THREE.CylinderGeometry(0.06, 0.06, 12, 8);
     [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]].forEach(([cx, cz]) => {
-        const col = new THREE.Mesh(colGeo, towerMat);
-        col.position.set(cx, 6, cz);
-        tower.add(col);
+        const col = new THREE.Mesh(colGeo, towerMat); col.position.set(cx, 6, cz); tower.add(col);
     });
-
     for (let y = 1; y <= 11; y += 1.5) {
         const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), towerMat); b1.position.set(0, y, 0.6); tower.add(b1);
         const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), towerMat); b2.position.set(0, y, -0.6); tower.add(b2);
         const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), towerMat); b3.position.set(0.6, y, 0); tower.add(b3);
         const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), towerMat); b4.position.set(-0.6, y, 0); tower.add(b4);
     }
-
     const armMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.8 });
     const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.2), armMat);
-    arm.position.set(-0.7, 9.5, 0);
-    tower.add(arm);
-
+    arm.position.set(-0.7, 9.5, 0); tower.add(arm);
     tower.position.set(2.0, 1000.0, 0);
     launchTowerGroup.add(tower);
-
-    [-3.5, 3.5].forEach(x => {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.1, 13, 8), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
-        pole.position.set(x, 1006.5, -2.5);
-        launchTowerGroup.add(pole);
-    });
-
     scene.add(launchTowerGroup);
 }
 
@@ -264,27 +241,23 @@ export function updateExplosion(dt) {
     }
 }
 
-// 實體部件脫離與獨立運動派生
-export function spawnDebrisPiece(state, mesh, relVel) {
+// 🌍 真實彈道物理與殘骸渲染
+export function spawnDebrisPiece(state, mesh, relativeImpulse) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
     debrisGroup.add(mesh.clone());
     
-    const alt = Math.max(0, state.r.length() - R_EARTH);
-    const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
-    const visualPos = state.r.clone().normalize().multiplyScalar(1000 + visualAlt);
-    
-    debrisGroup.position.copy(visualPos);
-    debrisGroup.quaternion.copy(rocketGroup.quaternion);
     scene.add(debrisGroup);
 
+    // 儲存真實的 ECI 物理座標與速度 (套用相對分離衝量)
     debrisList.push({
         r: state.r.clone(),
-        v: state.v.clone().add(relVel),
+        v: state.v.clone().add(relativeImpulse),
         mesh: debrisGroup,
-        rotSpeedX: (Math.random() - 0.5) * 2.0,
-        rotSpeedZ: (Math.random() - 0.5) * 2.0,
-        life: 60
+        rotQuat: rocketGroup.quaternion.clone(),
+        rotAxis: new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize(),
+        rotSpeed: 0.5 + Math.random() * 1.5,
+        life: 180 // 存活 3 分鐘
     });
 }
 
@@ -292,18 +265,36 @@ export function updateDebris(dt) {
     for (let i = debrisList.length - 1; i >= 0; i--) {
         const d = debrisList[i];
         d.life -= dt;
+        
+        // 1. 真實引力與大氣阻力積分
         const rMag = d.r.length();
-        const grav = d.r.clone().multiplyScalar(-MU / Math.pow(rMag, 3));
-        d.v.add(grav.multiplyScalar(dt));
+        const alt = rMag - R_EARTH;
+        const grav = d.r.clone().multiplyScalar(-MU / (rMag * rMag * rMag));
+        
+        let drag = new THREE.Vector3(0,0,0);
+        if (alt < 100000 && alt > 0) {
+            const rho = 1.225 * Math.exp(-alt / 8500);
+            const speed = d.v.length();
+            if (speed > 1.0) {
+                // 假設殘骸質量 5000kg, 截面積 10, Cd 1.0
+                drag = d.v.clone().normalize().multiplyScalar(-0.5 * rho * speed * speed * 1.0 * 10.0 / 5000.0);
+            }
+        }
+        
+        d.v.add(grav.add(drag).multiplyScalar(dt));
         d.r.add(d.v.clone().multiplyScalar(dt));
         
-        const alt = Math.max(0, d.r.length() - R_EARTH);
+        // 2. 雙尺度視覺映射 (與主火箭共用同一套縮放，保證視覺比例一致不卡住)
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
         const visualPos = d.r.clone().normalize().multiplyScalar(1000 + visualAlt);
+        const visualScale = (alt < 5000) ? 1.0 : Math.min(10.0, 1.0 + Math.log10(1 + (alt - 5000) / 1000) * 3.5);
         
         d.mesh.position.copy(visualPos);
-        d.mesh.rotation.x += dt * d.rotSpeedX;
-        d.mesh.rotation.z += dt * d.rotSpeedZ;
+        d.mesh.scale.set(visualScale, visualScale, visualScale);
+        
+        // 3. 自轉
+        d.rotQuat.multiply(new THREE.Quaternion().setFromAxisAngle(d.rotAxis, d.rotSpeed * dt));
+        d.mesh.quaternion.copy(d.rotQuat);
 
         if (d.life <= 0 || d.r.length() < R_EARTH) {
             scene.remove(d.mesh);
