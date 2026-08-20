@@ -1,6 +1,6 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (v1.0 Platinum Edition)
- * (淡入淡出快速重試、子彈時間與暫停解耦、過載警報脈衝與 localStorage 持久化)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (v1.0 Master Edition)
+ * (座艙第一人稱視角、WASD 手動姿態操縱與空間站霍曼交會對接雷達)
  * @license MIT
  */
 
@@ -17,7 +17,7 @@ import {
     initRocketScene, setEnvironmentMode, switchRocketMesh, updateEnvironmentVisuals,
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles, spawnPadSteam, updatePadSteam,
-    scene, camera, controls, renderer, rocketGroup,
+    scene, camera, controls, renderer, rocketGroup, spaceStationMesh,
     activeRocketParts, earthMesh, moonMesh, rocketLight
 } from './rocket_engine.js';
 
@@ -27,11 +27,15 @@ let isAdvancedMode = false;
 let customRocketStats = null;
 
 let isPaused = false;
+let isCockpitView = false;
 let userInteractingWithCamera = false;
 let lastTime = performance.now();
 let timeScale = 1.0;
 let orbitLine = null;
 const ORBIT_SEGMENTS = 128;
+
+// 🎮 手動 WASD 操縱向量偏移 (Manual RCS / Gimbal Input)
+let manualControlInput = { pitch: 0, yaw: 0, roll: 0 };
 
 let countdownTime = 10;
 let isCountingDown = false;
@@ -41,7 +45,7 @@ let isUIVisible = true;
 let isDetailTelemetryVisible = false;
 let sonicBoomTriggered = false;
 
-const CAM_MODE = { LAUNCH_PAD: 0, LIFTOFF: 1, ASCEND: 2, MAX_Q: 3, STAGE_SEP: 4, ORBIT: 5, FREE: 6 };
+const CAM_MODE = { LAUNCH_PAD: 0, LIFTOFF: 1, ASCEND: 2, MAX_Q: 3, STAGE_SEP: 4, ORBIT: 5, COCKPIT: 6, FREE: 7 };
 let currentCamMode = CAM_MODE.LAUNCH_PAD;
 let targetCamPos = new THREE.Vector3();
 let targetLookAt = new THREE.Vector3();
@@ -264,7 +268,7 @@ function speakMissionCallout(text, lang = currentLang, urgency = 1.0) {
 
 const I18N = {
     zh: {
-        title: "🚀 躍上穹蒼 3D", subtitle: "航太動力學、多級分離與 3D 打印沙盒 (Platinum Edition)", langBtn: "English",
+        title: "🚀 躍上穹蒼 3D", subtitle: "航太動力學、多級分離與 3D 打印沙盒 (Master Edition)", langBtn: "English",
         toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
         toggleDetailShow: "📊 展開深度科研", toggleDetailHide: "📉 收起深度科研",
         modeSimple: "🟢 簡易模式 (必定成功)", modeAdvanced: "🔴 進階模式 (硬核物理)",
@@ -274,7 +278,7 @@ const I18N = {
         subGnc: "🧭 導航制導與控制 (GNC)", lblTurn: "轉向起始高度 (km):", lblTvc: "TVC 噴嘴響應靈敏度:",
         subEnv: "🌪️ 外部環境與電氣感測", lblWind: "高空切變風強度 (m/s):", lblDrift: "IMU 陀螺儀雜訊漂移:",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
-        btnPause: "⏸️ 暫停", btnResume: "▶️ 繼續飛行", btnResetCam: "🎥 重設視角",
+        btnPause: "⏸️ 暫停", btnResume: "▶️ 繼續飛行", btnResetCam: "🎥 重設視角", btnCockpit: "🪟 座艙視角 (C)",
         btnSlower: "⏪ 減速", btnFaster: "加速 ⏩", timeScalePrefix: "倍速: ",
         telemetryTitle: "⚙️ 飛行遙測狀態", ready: "發射台準備就緒，請點擊發射...",
         counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！火箭全力起飛",
@@ -307,7 +311,7 @@ const I18N = {
         }
     },
     en: {
-        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & 3D Print STL Sandbox (Platinum Edition)", langBtn: "中文 (繁體)",
+        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & 3D Print STL Sandbox (Master Edition)", langBtn: "中文 (繁體)",
         toggleUi: "📋 Mission Control Panel", toggleUiHide: "📋 Expand Panel",
         toggleDetailShow: "📊 Expand Diagnostics", toggleDetailHide: "📉 Collapse Diagnostics",
         modeSimple: "🟢 Simple Mode (Safe)", modeAdvanced: "🔴 Advanced Mode (Hardcore)",
@@ -317,7 +321,7 @@ const I18N = {
         subGnc: "🧭 Guidance, Navigation & Control (GNC)", lblTurn: "Pitch-over Altitude (km):", lblTvc: "TVC Gimbal Response Gain:",
         subEnv: "🌪️ Environment & Avionics", lblWind: "High-Alt Wind Shear (m/s):", lblDrift: "IMU Gyro Noise Drift:",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
-        btnPause: "⏸️ Pause", btnResume: "▶️ Resume", btnResetCam: "🎥 Reset Cam",
+        btnPause: "⏸️ Pause", btnResume: "▶️ Resume", btnResetCam: "🎥 Reset Cam", btnCockpit: "🪟 Cockpit (C)",
         btnSlower: "⏪ Slower", btnFaster: "Faster ⏩", timeScalePrefix: "Warp: ",
         telemetryTitle: "⚙️ Flight Telemetry", ready: "Pad ready. Awaiting countdown sequence...",
         counting: "⚠️ Terminal countdown sequence armed...", liftoff: "🔥 Main Engine Ignition! Liftoff!",
@@ -463,6 +467,7 @@ function applyLanguageUI() {
     const pauseEl = document.getElementById('btn-pause');
     if (pauseEl) pauseEl.innerText = isPaused ? t.btnResume : t.btnPause;
     setText('btn-reset-cam', t.btnResetCam);
+    setText('btn-cockpit', t.btnCockpit);
 
     setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
@@ -534,7 +539,6 @@ function updatePredictedOrbit(state) {
     orbitLine.visible = true;
 }
 
-// 🎮 事故診斷黑盒與專家調整建議
 function evaluateStructuralLimits(rocket) {
     if (rocket.isDestroyed || !isAdvancedMode) return;
 
@@ -593,7 +597,6 @@ function triggerAbortSequence(visualPos, shakeAmount) {
     showMissionDebrief(getOrbitalElements(rocket));
 }
 
-// 🛰️ 航太級多級分離
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
@@ -605,7 +608,6 @@ function handleMultiStageSeparation(rocket) {
     let lateralVec = new THREE.Vector3().crossVectors(forwardVec, upVec).normalize();
     if (lateralVec.lengthSq() < 0.1) lateralVec.set(1, 0, 0);
 
-    // 1. T+20s: 拋逃逸塔
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
@@ -621,7 +623,6 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.escape);
     }
 
-    // 2. T+45s: 芯一級與助推器脫落，二級接力
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
@@ -643,12 +644,11 @@ function handleMultiStageSeparation(rocket) {
 
         playStagingSound();
         cameraShake = 3.8;
-        bulletTimeTimer = 2.0; // 觸發子彈時間
+        bulletTimeTimer = 2.0;
         showMilestone(ms.boosters, "#f59e0b");
         speakMissionCallout(sp.boosters);
     }
 
-    // 3. T+60s: 蚌殼式整流罩分離
     if (t >= 60 && !rocket.fairingSeparated) {
         rocket.fairingSeparated = true;
         
@@ -671,7 +671,6 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.fairing);
     }
 
-    // 4. T+110s: 二級入軌
     if (t >= 110 && !rocket.stage2Separated) {
         rocket.stage2Separated = true;
         rocket.missionAccomplished = true;
@@ -683,7 +682,31 @@ function handleMultiStageSeparation(rocket) {
     }
 }
 
-// 🎮 情緒映射動態 HUD 更新
+// 🛰️ 霍曼交會對接雷達計算
+function updateRendezvousRadar() {
+    const rdvBox = document.getElementById('rendezvous-hud');
+    if (!rocket || !rocket.isLaunched || !spaceStationMesh) {
+        if (rdvBox) rdvBox.style.display = 'none';
+        return;
+    }
+
+    const alt = rocket.r.length() - R_EARTH;
+    if (alt > 100000) {
+        if (rdvBox) rdvBox.style.display = 'block';
+        
+        // 計算與天宮空間站的相對距離與速度
+        const stPos = spaceStationMesh.position.clone().multiplyScalar(1 / WORLD_SCALE);
+        const relDistKm = (rocket.r.distanceTo(stPos) / 1000).toFixed(1);
+        const relSpeed = Math.abs(rocket.v.length() - 7670).toFixed(0);
+        
+        setText('rdv-dist', `${relDistKm} km`);
+        setText('rdv-vel', `${relSpeed} m/s`);
+        setText('rdv-phase', `${((rocket.flightTime * 0.05) % 360).toFixed(1)}°`);
+    } else {
+        if (rdvBox) rdvBox.style.display = 'none';
+    }
+}
+
 function updateTelemetryValues() {
     const t = I18N[currentLang];
     if (!rocket) return;
@@ -698,7 +721,6 @@ function updateTelemetryValues() {
     setText('hud-alt', `${(alt / 1000).toFixed(1)} km`);
     setText('hud-vel', `${speed.toFixed(0)} m/s (M${mach})`);
     
-    // 1. 高度光譜動態漸變 (0km 橙紅 -> 30km 金黃 -> 80km+ 冰藍)
     const altEl = document.getElementById('hud-alt');
     if (altEl) {
         const altProgress = Math.min(1.0, alt / 80000);
@@ -708,7 +730,6 @@ function updateTelemetryValues() {
         altEl.style.color = `#${dynamicColor.getHexString()}`;
     }
 
-    // 2. 音障突破動畫 (Mach 1.0 Flash)
     const velBox = document.getElementById('hud-box-vel');
     if (parseFloat(mach) >= 1.0 && !sonicBoomTriggered) {
         sonicBoomTriggered = true;
@@ -718,7 +739,6 @@ function updateTelemetryValues() {
         }
     }
 
-    // 3. 🚨 白金級：過載 (G-Force) 與 Max-Q 危險高能警示
     const gEl = document.getElementById('t-gforce');
     if (gEl && isDetailTelemetryVisible) {
         const gforce = rocket.currentGForce;
@@ -761,13 +781,14 @@ function updateTelemetryValues() {
         setText('t-ecc', orbit.isOrbital ? orbit.eccentricity.toFixed(4) : '—');
     }
 
+    updateRendezvousRadar();
+
     if (rocket.missionAccomplished && !milestoneShown.orbit) { 
         milestoneShown.orbit = true; 
         showMissionDebrief(orbit); 
     }
 }
 
-// 🎮 事故重建黑盒與任務結算展示
 function showMissionDebrief(orbit) {
     const modal = document.getElementById('debrief-modal'); 
     if (!modal || modal.style.display === 'flex') return; 
@@ -816,19 +837,24 @@ function showMissionDebrief(orbit) {
     }
 }
 
-// ⚡ 白金級：淡入淡出快速重試 (0.3s 電影級平滑轉場)
 function resetMission() {
     document.body.style.opacity = '0';
     setTimeout(() => {
         stopRocketRumble();
         isCountingDown = false;
         isPaused = false;
+        isCockpitView = false;
         sonicBoomTriggered = false;
         bulletTimeTimer = 0;
+        manualControlInput = { pitch: 0, yaw: 0, roll: 0 };
         milestoneShown = { escape: false, boosters: false, fairing: false, stage2: false, orbit: false };
 
         const modal = document.getElementById('debrief-modal');
         if (modal) modal.style.display = 'none';
+        const cockpitUi = document.getElementById('cockpit-overlay');
+        if (cockpitUi) cockpitUi.style.display = 'none';
+        const manualHud = document.getElementById('manual-control-hud');
+        if (manualHud) manualHud.style.display = 'none';
 
         const engKey = document.getElementById('sel-engine')?.value || 'CZ10A';
         if (engKey !== 'CUSTOM_STL') {
@@ -863,7 +889,6 @@ function resetMission() {
         if (box) box.classList.remove('collapsed');
         setText('btn-toggle-ui', I18N[currentLang].toggleUi);
 
-        // 淡入恢復
         document.body.style.opacity = '1';
     }, 300);
 }
@@ -952,6 +977,21 @@ function executeLiftoff() {
     rocket.guidanceActive = true;
     cameraShake = 2.8;
     updateStatus(I18N[currentLang].liftoff, "#38bdf8");
+
+    // 顯示 WASD 手動操控提示
+    const manualHud = document.getElementById('manual-control-hud');
+    if (manualHud) manualHud.style.display = 'block';
+}
+
+function toggleCockpitView() {
+    isCockpitView = !isCockpitView;
+    const overlay = document.getElementById('cockpit-overlay');
+    if (overlay) overlay.style.display = isCockpitView ? 'block' : 'none';
+    const btn = document.getElementById('btn-cockpit');
+    if (btn) {
+        btn.style.background = isCockpitView ? "rgba(99, 102, 241, 0.4)" : "rgba(99, 102, 241, 0.2)";
+        btn.style.borderColor = isCockpitView ? "#a5b4fc" : "#818cf8";
+    }
 }
 
 function bindUI() {
@@ -963,6 +1003,9 @@ function bindUI() {
 
     const btnQuickRetry = document.getElementById('btn-quick-retry');
     if (btnQuickRetry) btnQuickRetry.onclick = resetMission;
+
+    const btnCockpit = document.getElementById('btn-cockpit');
+    if (btnCockpit) btnCockpit.onclick = toggleCockpitView;
     
     const selEnv = document.getElementById('sel-env');
     if (selEnv) selEnv.onchange = (e) => { setEnvironmentMode(e.target.value); saveUserConfig(); };
@@ -1013,12 +1056,32 @@ function bindUI() {
         }
     };
     if (btnPause) btnPause.onclick = togglePause;
-    window.addEventListener('keydown', (e) => { if (e.code === 'Space') togglePause(); });
+
+    // 🎮 鍵盤手動操控與座艙切換快捷鍵
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') togglePause();
+        if (e.code === 'KeyC') toggleCockpitView();
+        if (e.code === 'KeyW') manualControlInput.pitch = 1;
+        if (e.code === 'KeyS') manualControlInput.pitch = -1;
+        if (e.code === 'KeyA') manualControlInput.yaw = -1;
+        if (e.code === 'KeyD') manualControlInput.yaw = 1;
+        if (e.code === 'KeyQ') manualControlInput.roll = -1;
+        if (e.code === 'KeyE') manualControlInput.roll = 1;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyW' || e.code === 'KeyS') manualControlInput.pitch = 0;
+        if (e.code === 'KeyA' || e.code === 'KeyD') manualControlInput.yaw = 0;
+        if (e.code === 'KeyQ' || e.code === 'KeyE') manualControlInput.roll = 0;
+    });
 
     const btnResetCam = document.getElementById('btn-reset-cam');
     if (btnResetCam) {
         btnResetCam.onclick = () => {
             userInteractingWithCamera = false;
+            isCockpitView = false;
+            const overlay = document.getElementById('cockpit-overlay');
+            if (overlay) overlay.style.display = 'none';
             currentCamMode = CAM_MODE.ASCEND;
             if (controls) controls.reset();
         };
@@ -1082,7 +1145,6 @@ function gameLoop(now) {
         return;
     }
 
-    // 🎮 白金級：子彈時間優先級解耦（暫停時凍結計時，慢動作不與倍速疊加紊亂）
     let currentEffectiveTimeScale = timeScale;
     if (bulletTimeTimer > 0) { 
         bulletTimeTimer -= dt; 
@@ -1091,9 +1153,26 @@ function gameLoop(now) {
 
     if (moonMesh) moonMesh.position.copy(getMoonPosition(performance.now() / 1000).multiplyScalar(WORLD_SCALE));
     if (earthMesh) earthMesh.rotation.y += dt * 0.02 * currentEffectiveTimeScale;
+    
+    // 🛰️ 天宮空間站沿 400km 軌道運動
+    if (spaceStationMesh) {
+        spaceStationMesh.rotation.y += dt * 0.04 * currentEffectiveTimeScale;
+    }
+
     updateExplosion(dt * currentEffectiveTimeScale);
 
     if (rocket && rocket.isLaunched && !rocket.isDestroyed) {
+        // 🎮 WASD 手動姿態向量微調疊加
+        if (manualControlInput.pitch !== 0 || manualControlInput.yaw !== 0 || manualControlInput.roll !== 0) {
+            const manualQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                manualControlInput.pitch * 0.025,
+                manualControlInput.roll * 0.025,
+                manualControlInput.yaw * 0.025,
+                'XYZ'
+            ));
+            rocket.thrustDir.applyQuaternion(manualQuat).normalize();
+        }
+
         executeGuidance(rocket, dt);
 
         let remainingDt = dt * currentEffectiveTimeScale;
@@ -1140,7 +1219,15 @@ function gameLoop(now) {
         const dynamicQShake = Math.min(1.8, dynQkPa / 30.0);
         if (dynamicQShake > cameraShake) cameraShake = dynamicQShake;
 
-        if (!userInteractingWithCamera) {
+        // 🪟 第一人稱座艙視角 vs 外景導演相機
+        if (isCockpitView) {
+            // 相機置於載人飛船頂部舷窗 (Look Forward)
+            const localCockpitPos = new THREE.Vector3(0, 7.8, 0.4);
+            const cockpitWorldPos = localCockpitPos.applyMatrix4(rocketGroup.matrixWorld);
+            const lookForwardPos = new THREE.Vector3(0, 15.0, 0.4).applyMatrix4(rocketGroup.matrixWorld);
+            camera.position.copy(cockpitWorldPos);
+            camera.lookAt(lookForwardPos);
+        } else if (!userInteractingWithCamera) {
             if (bulletTimeTimer <= 0) {
                 if (alt < 500) currentCamMode = CAM_MODE.LIFTOFF;
                 else if (speed > 310 && speed < 440 && alt < 25000) currentCamMode = CAM_MODE.MAX_Q;
