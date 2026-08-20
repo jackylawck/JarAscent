@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (鏡頭永遠鎖定主飛行器)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (包含視角重設與防意外縮放)
  * @license MIT
  */
 
@@ -209,7 +209,7 @@ const I18N = {
         subGnc: "🧭 導航制導與控制 (GNC)", lblTurn: "轉向起始高度 (km):", lblTvc: "TVC 噴嘴響應靈敏度:",
         subEnv: "🌪️ 外部環境與電氣感測", lblWind: "高空切變風強度 (m/s):", lblDrift: "IMU 陀螺儀雜訊漂移:",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
-        btnPause: "⏸️ 暫停 (3D 檢視)", btnResume: "▶️ 繼續飛行",
+        btnPause: "⏸️ 暫停", btnResume: "▶️ 繼續飛行", btnResetCam: "🎥 重設視角",
         btnSlower: "⏪ 減速", btnFaster: "加速 ⏩", timeScalePrefix: "倍速: ",
         telemetryTitle: "⚙️ 飛行遙測狀態", ready: "發射台準備就緒，請點擊發射...",
         counting: "⚠️ 終端倒數進行中 (Terminal Countdown Active)...", liftoff: "🔥 點火升空！火箭全力起飛",
@@ -252,7 +252,7 @@ const I18N = {
         subGnc: "🧭 Guidance, Navigation & Control (GNC)", lblTurn: "Pitch-over Altitude (km):", lblTvc: "TVC Gimbal Response Gain:",
         subEnv: "🌪️ Environment & Avionics", lblWind: "High-Alt Wind Shear (m/s):", lblDrift: "IMU Gyro Noise Drift:",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
-        btnPause: "⏸️ Pause (3D Orbit)", btnResume: "▶️ Resume Flight",
+        btnPause: "⏸️ Pause", btnResume: "▶️ Resume", btnResetCam: "🎥 Reset Cam",
         btnSlower: "⏪ Slower", btnFaster: "Faster ⏩", timeScalePrefix: "Warp: ",
         telemetryTitle: "⚙️ Flight Telemetry", ready: "Pad ready. Awaiting countdown sequence...",
         counting: "⚠️ Terminal countdown sequence armed...", liftoff: "🔥 Main Engine Ignition! Liftoff!",
@@ -397,6 +397,7 @@ function applyLanguageUI() {
     
     const pauseEl = document.getElementById('btn-pause');
     if (pauseEl) pauseEl.innerText = isPaused ? t.btnResume : t.btnPause;
+    setText('btn-reset-cam', t.btnResetCam);
 
     setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
@@ -521,7 +522,6 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
-// 🛰️ 真實多級分離時序
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
@@ -814,9 +814,21 @@ function bindUI() {
     if (btnPause) btnPause.onclick = togglePause;
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') togglePause(); });
 
+    // 🎥 一鍵重設視角按鈕
+    const btnResetCam = document.getElementById('btn-reset-cam');
+    if (btnResetCam) {
+        btnResetCam.onclick = () => {
+            userInteractingWithCamera = false;
+            currentCamMode = CAM_MODE.ASCEND;
+            if (controls) {
+                controls.reset();
+            }
+        };
+    }
+
     if (controls) {
         controls.addEventListener('start', () => { userInteractingWithCamera = true; });
-        controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2500); });
+        controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 3000); });
     }
 
     const dropZone = document.getElementById('stl-drop-zone');
@@ -911,12 +923,9 @@ function gameLoop(now) {
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
 
-        // 🎯 正確計算發動機噴口與鏡頭鎖定點（一級在底部，二級在上方 5.8m）
         const isS2 = rocket.stage === 2;
         const nozzleOffset = isS2 ? 5.8 * visualScale : 0.3 * visualScale;
         const currentNozzlePos = visualPos.clone().add(thrustDir.clone().multiplyScalar(nozzleOffset));
-
-        // 🎯 鏡頭永遠鎖定升空中的第二級/載荷艙中心
         const craftFocusPos = visualPos.clone().add(thrustDir.clone().multiplyScalar((isS2 ? 7.2 : 4.5) * visualScale));
 
         if (!userInteractingWithCamera) {
@@ -960,7 +969,6 @@ function gameLoop(now) {
             controls.target.copy(craftFocusPos);
         }
 
-        // 🔥 動態發射尾焰（一級大氣橘紅烈焰 / 二級深藍真空羽流）
         if (thrustMag > 1000) {
             spawnExhaustParticles(currentNozzlePos, thrustDir, rocket.throttle || 1.0, isS2, alt > 35000);
             if (rocketLight) { rocketLight.position.copy(currentNozzlePos); rocketLight.intensity = 7.0; }
