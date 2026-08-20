@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (事件驅動分離與模組化解耦版)
+ * js/rocket_game.js - JarAscent 3D (修復純英化、重置鏡頭坐標與完全清理舊殘骸)
  * @license MIT
  */
 
@@ -16,6 +16,7 @@ import {
     initRocketScene, setEnvironmentMode, switchRocketMesh, updateEnvironmentVisuals,
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles, spawnPadSteam, updatePadSteam,
+    clearAllDebrisAndVFX,
     scene, camera, controls, renderer, rocketGroup, spaceStationMesh,
     activeRocketParts, earthMesh, moonMesh, rocketLight
 } from './rocket_engine.js';
@@ -34,7 +35,7 @@ let orbitLine = null;
 const ORBIT_SEGMENTS = 128;
 
 let manualControlInput = { pitch: 0, yaw: 0, roll: 0 };
-let triggeredEvents = new Set(); // 記錄已觸發的分離事件
+let triggeredEvents = new Set();
 
 let countdownTime = 10;
 let isCountingDown = false;
@@ -98,7 +99,7 @@ function loadUserConfig() {
     } catch (e) {}
 }
 
-// ==================== 🔊 三頻分層聲學引擎 ====================
+// ==================== 🔊 聲學引擎 ====================
 let audioCtx = null;
 let subRumbleOsc = null;
 let midCombustionNode = null;
@@ -288,6 +289,7 @@ const I18N = {
         onPad: "發射台地面 (On Pad)", ascending: "主動爬升段 (Ascending)", stableOrbit: "🟢 圓軌道巡航 (Orbit)",
         abortTitle: "💥 任務異常中止 (RUD Failure)", abortRestart: "🔄 重新設定並再次發射",
         lblStatStatus: "任務狀態", lblStatMaxvel: "最高速度", lblStatMaxq: "最大動態氣壓", lblStatPeri: "近地點誤差", lblStatOrbit: "最終軌道", lblStatFuel: "剩餘燃料裕度",
+        manualHud: "🎮 <b>手動操縱模式啟用 (Manual Flight)</b><br>• 鍵盤 [W/S]: 俯仰 Pitch | [A/D]: 偏航 Yaw<br>• 鍵盤 [Q/E]: 滾轉 Roll | [C]: 切換座艙視角",
         envOptions: { DAY: "☀️ 白天發射 (Day Launch)", NIGHT: "🌙 夜間發射 (Night Launch)" },
         payloadOptions: { "8000": "新一代載人飛船 (8,000 kg)", "15000": "空間站核心艙 (15,000 kg)", "35000": "重型補給艙 (35,000 kg)", "60000": "極限超重載荷 (60,000 kg) ⚠️" },
         speech: {
@@ -324,6 +326,7 @@ const I18N = {
         onPad: "Vehicle on Pad (Pre-Ignition)", ascending: "Active Ascent Phase", stableOrbit: "🟢 Stable Orbit Cruise",
         abortTitle: "💥 Catastrophic Mission Abort", abortRestart: "🔄 Re-Configure & Launch Again",
         lblStatStatus: "Mission Status", lblStatMaxvel: "Max Velocity", lblStatMaxq: "Max Dyn Pressure (Max-Q)", lblStatPeri: "Periapsis Deviation", lblStatOrbit: "Final Orbit", lblStatFuel: "Propellant Margin",
+        manualHud: "🎮 <b>Manual Attitude Mode Active</b><br>• Keys [W/S]: Pitch | [A/D]: Yaw<br>• Keys [Q/E]: Roll | [C]: Cockpit Camera",
         envOptions: { DAY: "☀️ Day Launch (Sunny)", NIGHT: "🌙 Night Launch (Starfield)" },
         payloadOptions: { "8000": "Crewed Spacecraft (8,000 kg)", "15000": "Space Station Module (15,000 kg)", "35000": "Heavy Cargo Pod (35,000 kg)", "60000": "Extreme Overload Pod (60,000 kg) ⚠️" },
         speech: {
@@ -457,6 +460,9 @@ function applyLanguageUI() {
     setText('btn-reset-cam', t.btnResetCam);
     setText('btn-cockpit', t.btnCockpit);
 
+    const manualHud = document.getElementById('manual-control-hud');
+    if (manualHud) manualHud.innerHTML = t.manualHud;
+
     setText('lbl-stl-drop', t.stlDrop);
     setText('ui-config-title', t.configTitle); setText('lbl-env', t.lblEnv); setText('lbl-engine', t.lblEngine);
     setText('sub-prop', t.subProp); setText('lbl-payload', t.lblPayload); setText('lbl-fuel', t.lblFuel);
@@ -585,7 +591,7 @@ function triggerAbortSequence(visualPos, shakeAmount) {
     showMissionDebrief(getOrbitalElements(rocket));
 }
 
-// 🛰️ 資料驅動多級分離架構 (Data-Driven Separation Pipeline)
+// 🛰️ 資料驅動多級分離架構 (修正分離法線向量，不再左右亂飄)
 function handleDataDrivenSeparation(rocket) {
     if (rocket.isDestroyed || !rocket.engine || !rocket.engine.separationEvents) return;
     const t = rocket.flightTime;
@@ -671,7 +677,6 @@ function handleDataDrivenSeparation(rocket) {
     }
 }
 
-// 🛰️ 霍曼交會對接雷達計算
 function updateRendezvousRadar() {
     const rdvBox = document.getElementById('rendezvous-hud');
     if (!rocket || !rocket.isLaunched || !spaceStationMesh) {
@@ -824,6 +829,7 @@ function showMissionDebrief(orbit) {
     }
 }
 
+// ⚡ 核心修復：徹底清空舊碎片、鏡頭精準重定發射台地面
 function resetMission() {
     document.body.style.opacity = '0';
     setTimeout(() => {
@@ -836,6 +842,9 @@ function resetMission() {
         manualControlInput = { pitch: 0, yaw: 0, roll: 0 };
         triggeredEvents.clear();
 
+        // 🧹 1. 完全清除上一場遺留的所有殘骸與粒子
+        clearAllDebrisAndVFX();
+
         const modal = document.getElementById('debrief-modal');
         if (modal) modal.style.display = 'none';
         const cockpitUi = document.getElementById('cockpit-overlay');
@@ -843,6 +852,7 @@ function resetMission() {
         const manualHud = document.getElementById('manual-control-hud');
         if (manualHud) manualHud.style.display = 'none';
 
+        // 🔄 2. 重新構建並初始化火箭模型
         const engKey = document.getElementById('sel-engine')?.value || 'CZ10A';
         if (engKey !== 'CUSTOM_STL') {
             switchRocketMesh(engKey);
@@ -857,10 +867,11 @@ function resetMission() {
 
         rocket = null;
 
+        // 🎥 3. 鏡頭精確復位到發射台特寫視角
         currentCamMode = CAM_MODE.LAUNCH_PAD;
-        camera.position.set(0, 1012, 22);
+        camera.position.set(0, 1008, 24);
         controls.target.set(0, 1004, 0);
-        controls.reset();
+        controls.update();
 
         applyLanguageUI();
         setText('hud-time', '0.0s');
@@ -1180,7 +1191,7 @@ function gameLoop(now) {
         rocketGroup.updateMatrixWorld(true);
 
         evaluateStructuralLimits(rocket);
-        handleDataDrivenSeparation(rocket); // 🚀 資料驅動分離
+        handleDataDrivenSeparation(rocket);
         updateDebris(dt * currentEffectiveTimeScale, visualScale);
         updateExhaustParticles(dt * currentEffectiveTimeScale);
 
