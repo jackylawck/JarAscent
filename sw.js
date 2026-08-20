@@ -1,5 +1,5 @@
-// sw.js 頂部
-const CACHE_NAME = 'jarascent-v2.1'; // 每次更新修改此版本號
+// sw.js
+const CACHE_NAME = 'jarascent-v3.5';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -13,7 +13,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (e) => {
-    self.skipWaiting(); // 強制跳過等待，立刻啟用新版本
+    self.skipWaiting();
     e.waitUntil(
         caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
     );
@@ -24,7 +24,7 @@ self.addEventListener('activate', (e) => {
         caches.keys().then((keys) => {
             return Promise.all(
                 keys.map((key) => {
-                    if (key !== CACHE_NAME) return caches.delete(key); // 清除舊版本快取
+                    if (key !== CACHE_NAME) return caches.delete(key);
                 })
             );
         }).then(() => self.clients.claim())
@@ -33,6 +33,6 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
     e.respondWith(
-        fetch(e.request).catch(() => caches.match(e.request)) // 優先讀取網路最新代碼
+        fetch(e.request).catch(() => caches.match(e.request))
     );
 });
