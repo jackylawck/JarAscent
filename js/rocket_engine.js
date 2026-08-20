@@ -1,6 +1,5 @@
 /**
- * js/rocket_engine.js - 航太視景引擎 v3.1 Master Edition
- * (羽流背壓生命週期、質量權重殘骸縮放、發射台熱蒸汽與 ECI 1:1 映射)
+ * js/rocket_engine.js - 航太視景引擎 (包含 VAB 工業區、空間站與動態光影)
  * @license MIT
  */
 
@@ -11,7 +10,7 @@ import { MU, R_EARTH, R_MOON, WORLD_SCALE, getMoonPosition } from './physics_cor
 
 export let scene, camera, renderer, controls;
 export let rocketGroup, activeRocketParts = null;
-export let earthMesh, moonMesh, launchTowerGroup, rocketLight, sunLight, hemiLight;
+export let earthMesh, moonMesh, spaceStationMesh, launchComplexGroup, rocketLight, sunLight, hemiLight;
 export let debrisList = [];
 export let explosionParticles = [];
 export let exhaustParticles = [];
@@ -91,6 +90,82 @@ export function switchRocketMesh(type) {
     rocketGroup.visible = true;
 }
 
+// 🏗️ 構建發射場工業區 (VAB、低溫儲罐、避雷塔與保障車輛)
+function buildSpaceportComplex() {
+    launchComplexGroup = new THREE.Group();
+    const concMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7, roughness: 0.3 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.5, roughness: 0.4 });
+
+    // 主發射台
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.2, 0.8, 32), concMat);
+    pad.position.set(0, 999.6, 0);
+    launchComplexGroup.add(pad);
+
+    // 紅色發射臍帶塔
+    const tower = new THREE.Group();
+    const colGeo = new THREE.CylinderGeometry(0.06, 0.06, 12, 8);
+    [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]].forEach(([cx, cz]) => {
+        const col = new THREE.Mesh(colGeo, redMat); col.position.set(cx, 6, cz); tower.add(col);
+    });
+    for (let y = 1; y <= 11; y += 1.5) {
+        const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), redMat); b1.position.set(0, y, 0.6); tower.add(b1);
+        const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), redMat); b2.position.set(0, y, -0.6); tower.add(b2);
+        const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), redMat); b3.position.set(0.6, y, 0); tower.add(b3);
+        const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), redMat); b4.position.set(-0.6, y, 0); tower.add(b4);
+    }
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.2), metalMat);
+    arm.position.set(-0.7, 9.5, 0); tower.add(arm);
+    tower.position.set(2.0, 1000.0, 0);
+    launchComplexGroup.add(tower);
+
+    // 垂直總裝廠房 (VAB Building - 遠處地標)
+    const vabMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
+    const vab = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 6), vabMat);
+    vab.position.set(-18, 1007, -15);
+    launchComplexGroup.add(vab);
+
+    // 低溫液氧/液氫球形儲罐 (Cryogenic Spherical Tanks)
+    const tankGeo = new THREE.SphereGeometry(1.5, 16, 16);
+    [-8, -12].forEach((x, idx) => {
+        const tank = new THREE.Mesh(tankGeo, metalMat);
+        tank.position.set(x, 1001.2, -6 + idx * 4);
+        launchComplexGroup.add(tank);
+    });
+
+    // 地面保障特種車輛 (Support Trucks)
+    const truckMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+    const truck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 1.6), truckMat);
+    truck.position.set(4.5, 1000.25, 4);
+    launchComplexGroup.add(truck);
+
+    scene.add(launchComplexGroup);
+}
+
+// 🛰️ 構建 400km 軌道目標天宮空間站 (Tiangong Space Station)
+function buildSpaceStation() {
+    spaceStationMesh = new THREE.Group();
+    const modMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2 });
+    const solarMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.9, roughness: 0.1 });
+
+    // 核心艙
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 3.2, 16), modMat);
+    core.rotation.z = Math.PI / 2;
+    spaceStationMesh.add(core);
+
+    // 太陽翼 (兩側巨大太陽能電池板)
+    [-2.2, 2.2].forEach(x => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.02, 0.6), solarMat);
+        wing.position.set(x, 0, 0);
+        spaceStationMesh.add(wing);
+    });
+
+    // 部署於 400km 圓軌道 (ECI 坐標系半徑 = 6778 km)
+    const rOrbit = (R_EARTH + 400000) * WORLD_SCALE;
+    spaceStationMesh.position.set(rOrbit, 0, 0);
+    scene.add(spaceStationMesh);
+}
+
 export function initRocketScene(containerEl) {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x38bdf8);
@@ -145,40 +220,14 @@ export function initRocketScene(containerEl) {
     );
     scene.add(moonMesh);
 
-    buildLaunchPadAndTower();
+    buildSpaceportComplex();
+    buildSpaceStation();
 
     rocketGroup = new THREE.Group();
     rocketGroup.position.set(0, 1000.4, 0);
     scene.add(rocketGroup);
 
     switchRocketMesh("CZ10A");
-}
-
-function buildLaunchPadAndTower() {
-    launchTowerGroup = new THREE.Group();
-    const padMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, metalness: 0.2 });
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.8, 0.8, 32), padMat);
-    pad.position.set(0, 999.6, 0);
-    launchTowerGroup.add(pad);
-
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.5, roughness: 0.4 });
-    const tower = new THREE.Group();
-    const colGeo = new THREE.CylinderGeometry(0.06, 0.06, 12, 8);
-    [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]].forEach(([cx, cz]) => {
-        const col = new THREE.Mesh(colGeo, towerMat); col.position.set(cx, 6, cz); tower.add(col);
-    });
-    for (let y = 1; y <= 11; y += 1.5) {
-        const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), towerMat); b1.position.set(0, y, 0.6); tower.add(b1);
-        const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), towerMat); b2.position.set(0, y, -0.6); tower.add(b2);
-        const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), towerMat); b3.position.set(0.6, y, 0); tower.add(b3);
-        const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.2), towerMat); b4.position.set(-0.6, y, 0); tower.add(b4);
-    }
-    const armMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.8 });
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.2), armMat);
-    arm.position.set(-0.7, 9.5, 0); tower.add(arm);
-    tower.position.set(2.0, 1000.0, 0);
-    launchTowerGroup.add(tower);
-    scene.add(launchTowerGroup);
 }
 
 export function triggerCatastrophicExplosion(pos) {
@@ -211,7 +260,7 @@ export function triggerCatastrophicExplosion(pos) {
 export function updateExplosion(dt) {
     for (let i = explosionParticles.length - 1; i >= 0; i--) {
         const ep = explosionParticles[i];
-        ep.vy -= 9.8 * dt; // 重力彈道加速度
+        ep.vy -= 9.8 * dt;
         ep.mesh.position.add(new THREE.Vector3(ep.vx, ep.vy, ep.vz).multiplyScalar(dt));
         ep.mesh.scale.multiplyScalar(1.03);
         ep.life -= dt;
@@ -223,7 +272,6 @@ export function updateExplosion(dt) {
     }
 }
 
-// 🔬 殘骸派生：加入質量感知縮放係數 (Mass-Weighted Visual Scale)
 export function spawnDebrisPiece(state, mesh, relativeImpulse, aeroProfile = null) {
     if (!mesh) return;
     const debrisGroup = new THREE.Group();
@@ -233,8 +281,6 @@ export function spawnDebrisPiece(state, mesh, relativeImpulse, aeroProfile = nul
     const profile = aeroProfile || { mass: 5000, refArea: 8.0, cd: 0.8, pitchRate: 0.15 };
     const initialQuat = rocketGroup.quaternion.clone();
     debrisGroup.quaternion.copy(initialQuat);
-
-    // 重型引擎結構視覺上更厚重紮實
     const massWeightScale = 0.65 + Math.min(1.0, profile.mass / 40000) * 0.7;
 
     debrisList.push({
@@ -252,7 +298,6 @@ export function spawnDebrisPiece(state, mesh, relativeImpulse, aeroProfile = nul
     });
 }
 
-// 🔬 絕對 ECI 坐標映射 + 跨音速波阻峰值
 export function updateDebris(dt, currentRocketVisualScale = 1.0) {
     for (let i = debrisList.length - 1; i >= 0; i--) {
         const d = debrisList[i];
@@ -267,7 +312,7 @@ export function updateDebris(dt, currentRocketVisualScale = 1.0) {
         const mach = speed / 340.0;
         let cd = d.cdBase;
         if (mach >= 0.8 && mach <= 1.3) {
-            cd *= 2.4; // 跨音速波阻突增
+            cd *= 2.4;
         } else if (mach > 1.3) {
             cd *= 0.85;
         }
@@ -301,7 +346,6 @@ export function updateDebris(dt, currentRocketVisualScale = 1.0) {
     }
 }
 
-// 🔬 動態羽流：熱輻射光譜演變 + 氣壓背壓生命週期脫鉤
 export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2 = false, currentAlt = 0) {
     if (exhaustParticles.length > 350) return;
     
@@ -320,7 +364,6 @@ export function spawnExhaustParticles(nozzleWorldPos, thrustDir, power, isStage2
     const vacuumColor = isStage2 ? new THREE.Color(0x38bdf8) : new THREE.Color(0x818cf8);
     const currentSpectrumColor = seaLevelColor.clone().lerp(vacuumColor, isStage2 ? 0.9 : altRatio * 0.75);
 
-    // 🔬 生命週期脫鉤：稀薄高空散熱慢，粒子殘留時間加倍
     const baseLife = isStage2 ? 0.45 : 0.70;
     const dynamicLife = baseLife * (0.6 + (1.0 - pressureRatio) * 0.9);
 
@@ -371,7 +414,6 @@ export function updateExhaustParticles(dt) {
     }
 }
 
-// 🔬 發射台水噴淋降噪殘留蒸汽 (Pad Steam Effusion)
 export function spawnPadSteam() {
     if (padSteamParticles.length > 80) return;
     for (let i = 0; i < 2; i++) {
