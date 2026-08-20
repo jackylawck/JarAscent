@@ -125,6 +125,7 @@
         <button class="dock-btn" id="btn-toggle-ui">📋 任務控制面板</button>
         <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停</button>
         <button class="dock-btn" id="btn-reset-cam" style="background: rgba(56, 189, 248, 0.2);">🎥 重設視角</button>
+        <button class="dock-btn" id="btn-pwa-update" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;">🔄 檢查更新</button>
     </div>
 
     <div class="ui-overlay" id="ui-overlay-box">
@@ -269,5 +270,49 @@
 
     <div id="canvas-container"></div>
     <script type="module" src="js/rocket_game.js"></script>
+
+    <script>
+        // PWA Service Worker 註冊與版本監聽
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    reg.onupdatefound = () => {
+                        const installingWorker = reg.installing;
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                const btn = document.getElementById('btn-pwa-update');
+                                if (btn) {
+                                    btn.innerText = "🚀 發現新版 (點擊更新)";
+                                    btn.style.background = "#10b981";
+                                    btn.style.color = "#030712";
+                                }
+                            }
+                        };
+                    };
+                }).catch(err => console.log('SW setup failed', err));
+            });
+        }
+
+        // PWA 強制清除快取並重啟
+        const updateBtn = document.getElementById('btn-pwa-update');
+        if (updateBtn) {
+            updateBtn.onclick = async () => {
+                updateBtn.innerText = "⏳ 更新中...";
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (let reg of regs) {
+                        await reg.unregister();
+                    }
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (let key of keys) {
+                        await caches.delete(key);
+                    }
+                }
+                window.location.reload(true);
+            };
+        }
+    </script>
 </body>
 </html>
