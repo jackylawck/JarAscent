@@ -173,11 +173,7 @@
         • <span id="lbl-rdv-phase">軌道相位角</span>: <span id="rdv-phase">----°</span>
     </div>
 
-    <div id="manual-control-hud">
-        🎮 <b>手動操縱模式啟用 (Manual Flight)</b><br>
-        • 鍵盤 [W/S]: 俯仰 Pitch | [A/D]: 偏航 Yaw<br>
-        • 鍵盤 [Q/E]: 滾轉 Roll | [C]: 切換座艙視角
-    </div>
+    <div id="manual-control-hud"></div>
 
     <div id="countdown-hud">
         <div id="countdown-timer">T-10</div><div id="countdown-subtext">TERMINAL COUNTDOWN SEQUENCE</div>
@@ -315,7 +311,7 @@
             <div class="status-banner" id="flight-status">發射台準備就緒，請點擊發射...</div>
             <button class="btn" id="btn-launch">🔥 啟動 10 秒倒數發射 (Terminal T-10s)</button>
             
-            <div style="display: flex; gap: 8px; margin: 6px 0; justify-content: center;">
+            <div style="display: flex; gap: 8px; margin-6px 0; justify-content: center;">
                 <button id="btn-time-slower" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 6px 14px; min-height: 36px; border-radius: 8px; font-weight: bold; cursor: pointer;">⏪ 減速</button>
                 <span id="time-scale-display" style="color: #94a3b8; font-size: 0.8rem; align-self: center; font-weight: bold;">倍速: 1.0x</span>
                 <button id="btn-time-faster" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 6px 14px; min-height: 36px; border-radius: 8px; font-weight: bold; cursor: pointer;">加速 ⏩</button>
