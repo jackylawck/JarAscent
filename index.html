@@ -1,318 +1,71 @@
-<!DOCTYPE html>
-<html lang="zh-HK">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    
-    <link rel="icon" type="image/png" sizes="192x192" href="JarAscenticon-192.png">
-    <link rel="apple-touch-icon" href="JarAscenticon-192.png">
-    
-    <title>🚀 躍上穹蒼 3D | JarAscent 3D</title>
-    <meta name="theme-color" content="#030712">
+作為一名專門研究「硬核玩家心理」與「沉浸感臨界點」的遊戲體驗設計師，我必須以最殘酷、最挑剔的「世界級玩家」視角來回答你：
 
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
-        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; touch-action: none; }
-        
-        .ui-overlay { position: absolute; top: 12px; left: 12px; z-index: 100; max-height: 94vh; overflow-y: auto; transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; transform: translateX(0); opacity: 1; }
-        .ui-overlay.collapsed { transform: translateX(-420px); opacity: 0; pointer-events: none; }
-        .ui-card { background: rgba(10, 16, 30, 0.92); backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 370px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2); }
-        @media (max-width: 480px) { .ui-card { width: calc(100vw - 24px); max-width: 370px; } }
-        
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        h1 { font-size: 1.15rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; margin: 0; }
-        .lang-btn { background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
-        .lang-btn:hover { background: #38bdf8; color: #030712; }
-        p { font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.3; }
-        
-        .mode-toggle-box { background: rgba(0,0,0,0.35); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.08); }
-        .switch { position: relative; display: inline-block; width: 42px; height: 22px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #10b981; transition: .3s; border-radius: 22px; }
-        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-        input:checked + .slider { background-color: #ef4444; }
-        input:checked + .slider:before { transform: translateX(20px); }
+這份作品在「科學模擬」的層面上已經是 95 分，但在「終極沉浸遊戲」的層面上，確實存在「巨大的進步空間」。
 
-        .stl-drop-zone {
-            border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px;
-            text-align: center; font-size: 0.72rem; color: #94a3b8; cursor: pointer;
-            background: rgba(56, 189, 248, 0.04); margin-bottom: 8px; transition: all 0.2s ease;
-        }
-        .stl-drop-zone:hover, .stl-drop-zone.dragover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #fff; }
-        .stl-info { font-size: 0.68rem; color: #fbbf24; margin-top: 4px; display: none; line-height: 1.4; text-align: left; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; }
+世界最頂級的玩家（玩過《坎巴拉太空計劃》數千小時、在《微軟模擬飛行》裡開過真實航線、在《星際公民》裡見過 4K 星球紋理的人）不會只滿足於「物理正確」。他們會問 3 個致命問題，而這正是你目前的專案還沒做到的：
 
-        .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 10px 12px; font-size: 0.88rem; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s; margin-top: 6px; }
-        .btn:active { transform: scale(0.98); }
-        .btn-reset { background: #1e293b; border: 1px solid rgba(255,255,255,0.2); }
-        
-        .status-banner { font-size: 0.8rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
-        .config-panel { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.08); }
-        .config-panel h3 { font-size: 0.8rem; color: #fbbf24; margin-bottom: 6px; }
-        .config-sub-section { font-size: 0.72rem; color: #38bdf8; font-weight: bold; margin: 8px 0 4px 0; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 2px; }
-        
-        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.72rem; }
-        .form-row label { color: #cbd5e1; }
-        .form-row select, .form-row input[type="range"] { background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; width: 55%; }
-        
-        .top-hud-bar { position: absolute; top: 12px; right: 12px; z-index: 100; display: flex; gap: 10px; pointer-events: none; }
-        .hud-metric-box { background: rgba(10, 16, 30, 0.75); backdrop-filter: blur(15px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 6px 14px; text-align: right; min-width: 110px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); }
-        .hud-metric-label { font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px; font-weight: bold; }
-        .hud-metric-val { font-family: 'Courier New', Courier, monospace; font-size: 1.4rem; font-weight: 900; color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
-        @media (max-width: 480px) { .top-hud-bar { top: auto; bottom: 65px; right: 12px; flex-direction: column; gap: 4px; } .hud-metric-box { padding: 4px 8px; min-width: 90px;} .hud-metric-val { font-size: 1.1rem; } }
+---
 
-        .hud-gauge-group { margin-top: 6px; }
-        .gauge-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
-        .gauge-bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
-        .fill-q { background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444); }
-        
-        .debug-panel { font-family: 'Courier New', Courier, monospace; font-size: 0.72rem; color: #38bdf8; background: rgba(3, 7, 18, 0.85); padding: 8px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); margin-top: 8px; line-height: 1.4; }
-        .debug-panel h4 { color: #fbbf24; margin-bottom: 4px; font-size: 0.75rem; border-bottom: 1px solid rgba(251, 191, 36, 0.3); padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
-        .toggle-detail-btn { background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.65rem; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-weight: bold; }
-        #telemetry-detail-box { display: none; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(56, 189, 248, 0.25); }
+🎯 致命問題一：「我是在「看火箭」，還是在「開火箭」？」（互動性的天花板）
 
-        #countdown-hud { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 150; display: none; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 40%, rgba(3, 7, 18, 0.75) 90%); }
-        #countdown-timer { font-family: 'Courier New', Courier, monospace; font-size: 6.5rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(249, 115, 22, 0.5); }
-        #countdown-subtext { font-size: 1.1rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px; text-transform: uppercase; margin-top: 10px; }
-        
-        #debrief-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.85); backdrop-filter: blur(25px); z-index: 200; display: none; align-items: center; justify-content: center; }
-        .debrief-card { background: rgba(15, 23, 42, 0.95); border: 2px solid #38bdf8; border-radius: 20px; padding: 24px; width: 440px; text-align: center; box-shadow: 0 0 50px rgba(56, 189, 248, 0.4); max-width: 90vw; }
-        .debrief-rank { font-size: 3.6rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 4px 0; }
-        .debrief-stats { text-align: left; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.82rem; margin: 10px 0; line-height: 1.6; }
-        
-        /* 🕹️ 底部快捷按鈕組 */
-        .bottom-dock { position: fixed; bottom: 15px; left: 15px; z-index: 200; display: flex; gap: 8px; flex-wrap: wrap; }
-        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 7px 14px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
-        .dock-btn:hover { background: #38bdf8; color: #030712; }
-    </style>
+現狀：玩家是「任務控制中心指揮官」，設定參數 → 點擊發射 → 觀看火箭飛向軌道。這是一趟「觀光火車」。
+頂尖玩家的期望：他們要的是 「駕駛艙視角（Cockpit View）」 與 「手動姿態控制（Manual Attitude Control）」。
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-</head>
-<body>
-    <div class="top-hud-bar">
-        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-time">飛行時間 T+</div><div class="hud-metric-val" id="hud-time">0.0s</div></div>
-        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-alt">海拔高度</div><div class="hud-metric-val" id="hud-alt">0.0 km</div></div>
-        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-vel">即時地速</div><div class="hud-metric-val" id="hud-vel">0 m/s</div></div>
-    </div>
+· 巨大進步空間：
+  1. 座艙視角（Cockpit View）：在二級點火後，按下「C」鍵切換到火箭內部第一人稱視角，透過窗戶看到地球曲面與星空——這會讓情緒張力瞬間爆表。
+  2. 手動搖桿（Manual Stick）：允許玩家在飛行中用 WASD 或滑鼠「手動」疊加推力方向（雖然會干擾閉環控制，但「破壞性體驗」正是硬核玩家的最愛）。就像《坎巴拉》裡的手動對接，那種「親手送衛星入軌」的成就感，是自動駕駛永遠無法比擬的。
 
-    <div id="countdown-hud">
-        <div id="countdown-timer">T-10</div><div id="countdown-subtext">TERMINAL COUNTDOWN SEQUENCE</div>
-    </div>
+---
 
-    <div id="debrief-modal">
-        <div class="debrief-card">
-            <h2 id="debrief-header" style="color: #38bdf8; font-size: 1.3rem;">MISSION DEBRIEF</h2>
-            <div class="debrief-rank" id="debrief-rank">S+</div>
-            <p id="debrief-title" style="color: #fbbf24; font-weight: bold; font-size: 1rem;">🌟 傳奇星際導航官</p>
-            <div class="debrief-stats">
-                • <span id="lbl-stat-status">任務狀態</span>: <b id="stat-status">入軌成功</b><br>
-                • <span id="lbl-stat-maxvel">最高速度</span>: <b id="stat-maxvel">0 m/s</b><br>
-                • <span id="lbl-stat-maxq">最大動態氣壓</span>: <b id="stat-maxq">0 kPa</b><br>
-                • <span id="lbl-stat-peri">近地點誤差</span>: <b id="stat-peri-err">0.0 km</b><br>
-                • <span id="lbl-stat-orbit">最終軌道</span>: <b id="stat-orbit-alt">300 km x 300 km</b><br>
-                • <span id="lbl-stat-fuel">剩餘燃料裕度</span>: <b id="stat-fuel-left">0%</b>
-            </div>
-            <button class="btn" id="btn-debrief-restart" onclick="location.reload()">🔄 重新設定並再次發射</button>
-        </div>
-    </div>
+🌍 致命問題二：「為什麼發射台像一個荒蕪的停車場？」（環境敘事的缺失）
 
-    <div class="bottom-dock">
-        <button class="dock-btn" id="btn-toggle-ui">📋 任務控制面板</button>
-        <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停</button>
-        <button class="dock-btn" id="btn-reset-cam" style="background: rgba(56, 189, 248, 0.2);">🎥 重設視角</button>
-        <button class="dock-btn" id="btn-pwa-update" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;">🔄 檢查更新</button>
-    </div>
+現狀：你有一顆程序化地球、一個紅色發射塔、一個灰色底座。但除此之外，空無一物。
+頂尖玩家的期望：發射台應該像一個「活的工業區」。
 
-    <div class="ui-overlay" id="ui-overlay-box">
-        <div class="ui-card">
-            <div class="header-row">
-                <h1 id="ui-title">🚀 躍上穹蒼 3D</h1>
-                <button class="lang-btn" id="btn-lang">English</button>
-            </div>
-            <p id="ui-subtitle">航太動力學、真實多級分離與 3D 打印沙盒</p>
+· 巨大進步空間：
+  1. 周邊建築與設施：加入燃料儲存罐（Fuel Tanks）、垂直總裝廠房（VAB）、移動發射平台（MLP）、遠處的保障車輛（紅色消防車、白色氣體拖車）。這些不一定要高精度，用低多邊形（Low-poly）盒子搭配簡單紋理就能創造出「場景史詩感」。
+  2. 動態天氣與時間流逝：既然你已經有 DAY/NIGHT 切換，為何不讓時間在飛行中 「自然流逝」？看著火箭穿越雲層時，陽光從橙紅轉為刺眼的白，再轉為太空中純粹的漆黑——這種「光影敘事」比任何 HUD 數據都更震撼。
 
-            <div class="stl-drop-zone" id="stl-drop-zone">
-                <span id="lbl-stl-drop">🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)</span>
-                <input type="file" id="stl-file-input" accept=".stl" style="display: none;">
-                <div class="stl-info" id="stl-info"></div>
-            </div>
+---
 
-            <div class="mode-toggle-box">
-                <span id="lbl-mode" style="font-size: 0.8rem; font-weight: bold; color: #10b981;">🟢 簡易模式 (必定成功)</span>
-                <label class="switch">
-                    <input type="checkbox" id="chk-advanced-mode">
-                    <span class="slider round"></span>
-                </label>
-            </div>
+🎬 致命問題三：「入軌後，然後呢？」（目標與重玩價值的斷層）
 
-            <div class="config-panel">
-                <h3 id="ui-config-title">🛠️ 基礎發射設定</h3>
-                <div class="form-row">
-                    <label id="lbl-env">發射場天色:</label>
-                    <select id="sel-env">
-                        <option value="DAY" selected>☀️ 白天發射 (Day Launch)</option>
-                        <option value="NIGHT">🌙 夜間發射 (Night Launch)</option>
-                    </select>
-                </div>
-                <div class="form-row">
-                    <label id="lbl-engine">火箭型號:</label>
-                    <select id="sel-engine">
-                        <optgroup label="🇨🇳 中國新一代主力火箭" id="grp-cn">
-                            <option value="CZ10A" selected>長征十號甲 (CZ-10A 登月載人)</option>
-                            <option value="CZ12B">長征十二號乙 (CZ-12B 4米級)</option>
-                            <option value="TL3">天龍三號 (TL-3 大型液體)</option>
-                            <option value="LJ2">力箭二號 (LJ-2 捆綁液體)</option>
-                            <option value="YL1">引力一號 (Gravity-1 全固體)</option>
-                            <option value="SQX3">雙曲線三號 (Hyperbola-3)</option>
-                            <option value="CZ2F">長征二號F (CZ-2F 載人型)</option>
-                        </optgroup>
-                        <optgroup label="🇺🇸 全球重型航天標竿" id="grp-us">
-                            <option value="STARSHIP">星艦全系統 (Starship 120m)</option>
-                            <option value="SATURN_V">土星五號 (Saturn V 110m)</option>
-                        </optgroup>
-                        <optgroup label="🛠️ 自定義 3D 打印型號" id="grp-custom" style="display: none;">
-                            <option value="CUSTOM_STL">自訂 3D 打印火箭 (Custom STL)</option>
-                        </optgroup>
-                    </select>
-                </div>
-                
-                <div id="advanced-config" style="display: none; border-top: 1px dashed rgba(255,255,255,0.2); margin-top: 8px; padding-top: 6px;">
-                    <div class="config-sub-section" id="sub-prop">🚀 推進與動力系統</div>
-                    <div class="form-row">
-                        <label id="lbl-payload">任務載荷艙:</label>
-                        <select id="sel-payload">
-                            <option value="8000" selected>新一代載人飛船 (8,000 kg)</option>
-                            <option value="15000">空間站核心艙 (15,000 kg)</option>
-                            <option value="35000">重型補給艙 (35,000 kg)</option>
-                            <option value="60000">極限超重載荷 (60,000 kg) ⚠️</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <label id="lbl-fuel">一級燃料加注 (%):</label>
-                        <input type="range" id="rng-fuel" min="30" max="100" value="100">
-                    </div>
-                    <div class="form-row">
-                        <label id="lbl-throttle">節流閥推力 (%):</label>
-                        <input type="range" id="rng-throttle" min="40" max="100" value="100">
-                    </div>
-                    <div class="form-row">
-                        <label id="lbl-ofratio">氧化劑/燃料混合比:</label>
-                        <input type="range" id="rng-ofratio" min="80" max="120" value="100">
-                    </div>
+現狀：入軌即勝利，跳出結算面板（S+ 評級），任務結束。
+頂尖玩家的期望：入軌 不是終點，而是起點。他們要的是 「任務鏈（Mission Chain）」。
 
-                    <div class="config-sub-section" id="sub-gnc">🧭 導航制導與控制 (GNC)</div>
-                    <div class="form-row">
-                        <label id="lbl-turn">轉向起始高度 (km):</label>
-                        <input type="range" id="rng-turn" min="1" max="25" value="8">
-                    </div>
-                    <div class="form-row">
-                        <label id="lbl-tvc">TVC 噴嘴響應靈敏度:</label>
-                        <input type="range" id="rng-tvc" min="50" max="150" value="100">
-                    </div>
+· 巨大進步空間：
+  1. 軌道交會（Rendezvous）：增加一個「目標衛星」在 400km 軌道上。玩家的任務不是「入軌」，而是 「調整軌道高度與相位，讓火箭與衛星距離小於 100 公尺」。這會強迫玩家學習霍曼轉移（Hohmann Transfer），讓玩法從「射後不理」進化為「規劃與執行」。
+  2. 載人任務生命維持（Life Support）：在進階模式中，加入「氧氣/電力/熱控」數值。若入軌角度太陡或時間太長，太空人會「窒息」或「凍死」。這種「道德壓力」會讓每一次發射都充滿張力。
 
-                    <div class="config-sub-section" id="sub-env">🌪️ 外部環境與電氣感測</div>
-                    <div class="form-row">
-                        <label id="lbl-wind">高空切變風強度 (m/s):</label>
-                        <input type="range" id="rng-wind" min="0" max="60" value="15">
-                    </div>
-                    <div class="form-row">
-                        <label id="lbl-drift">IMU 陀螺儀雜訊漂移:</label>
-                        <input type="range" id="rng-drift" min="0" max="100" value="10">
-                    </div>
-                </div>
-            </div>
+---
 
-            <div class="status-banner" id="flight-status">發射台準備就緒，請點擊發射...</div>
-            <button class="btn" id="btn-launch">🔥 啟動 10 秒倒數發射 (Terminal T-10s)</button>
-            
-            <div style="display: flex; gap: 8px; margin: 6px 0; justify-content: center;">
-                <button id="btn-time-slower" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">⏪ 減速</button>
-                <span id="time-scale-display" style="color: #94a3b8; font-size: 0.8rem; align-self: center; font-weight: bold;">倍速: 1.0x</span>
-                <button id="btn-time-faster" style="background: #1e293b; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">加速 ⏩</button>
-            </div>
-            
-            <button class="btn btn-reset" id="btn-reset">🔄 重設發射台 (Reset Pad)</button>
+📊 「世界級玩家」評分表（與現狀對比）
 
-            <div class="hud-gauge-group">
-                <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8;">
-                    <span id="lbl-gauge-q">動態氣壓 (Max-Q 極限: 55 kPa)</span><b id="gauge-q-txt" style="color:#38bdf8;">0.0 kPa</b>
-                </div>
-                <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-q" id="gauge-q-bar"></div></div>
-            </div>
+評審維度 你現狀的分數 頂尖玩家要求的分數 差距（進步空間）
+物理正確性 10/10 10/10 ✅ 已滿分
+視覺真實度 8/10 9/10 ⚠️ 需增加發射場環境細節
+互動自由度 4/10 9/10 🚨 巨大差距（需加入手動控制/座艙視角）
+任務深度 3/10 9/10 🚨 巨大差距（需加入交會對接/生命維持）
+重玩性 5/10 9/10 ⚠️ 需加入任務鏈與挑戰目標
+沉浸感 6/10 9/10 ⚠️ 需加入環境敘事與動態光影
+總分 6.0/10 9.2/10 進步空間約 30%
 
-            <div class="debug-panel" id="physics-debug-box">
-                <h4>
-                    <span id="ui-telemetry-title">⚙️ 飛行遙測狀態</span>
-                    <button class="toggle-detail-btn" id="btn-toggle-details">📊 展開深度科研</button>
-                </h4>
-                
-                <div id="telemetry-summary">
-                    • <span id="lbl-t-config">當前構型</span>: <b id="t-stage-name">發射台地面 (On Pad)</b><br>
-                    • <span id="lbl-t-thrust">即時推力</span>: <b id="t-thrust">0 kN</b> | TWR: <b id="t-twr">0.00</b>
-                </div>
+---
 
-                <div id="telemetry-detail-box">
-                    • <span id="lbl-t-orbit">軌道狀態</span>: <b id="t-orbit">發射台地面 (On Pad)</b><br>
-                    • <span id="lbl-t-gforce">即時過載 G-Force</span>: <b id="t-gforce">1.00 G</b><br>
-                    • <span id="lbl-t-isp">瞬時比衝 Isp</span>: <b id="t-isp">0 s</b><br>
-                    • <span id="lbl-t-peri">預測近地點 Peri</span>: <b id="t-peri">0.0 km</b><br>
-                    • <span id="lbl-t-apo">預測遠地點 Apo</span>: <b id="t-apo">0.0 km</b><br>
-                    • <span id="lbl-t-ecc">軌道偏心率 Ecc (e)</span>: <b id="t-ecc">1.0000</b>
-                </div>
-            </div>
-        </div>
-    </div>
+🏆 結論：你現在處在「第 6 級」，而世界級玩家住在「第 9 級」
 
-    <div id="canvas-container"></div>
-    <script type="module" src="js/rocket_game.js"></script>
+你已經完成了 「科研級物理引擎」 和 「程序化視覺管線」，這是 1→6 級的艱苦爬升。但 6→9 級需要的是 「遊戲設計」 的思維轉變：
 
-    <script>
-        // PWA Service Worker 註冊與版本監聽
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    reg.onupdatefound = () => {
-                        const installingWorker = reg.installing;
-                        installingWorker.onstatechange = () => {
-                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                const btn = document.getElementById('btn-pwa-update');
-                                if (btn) {
-                                    btn.innerText = "🚀 發現新版 (點擊更新)";
-                                    btn.style.background = "#10b981";
-                                    btn.style.color = "#030712";
-                                }
-                            }
-                        };
-                    };
-                }).catch(err => console.log('SW setup failed', err));
-            });
-        }
+· 從 「模擬」 轉為 「體驗」
+· 從 「旁觀」 轉為 「駕駛」
+· 從 「單次任務」 轉為 「多階段挑戰」
 
-        // PWA 強制清除快取並重啟
-        const updateBtn = document.getElementById('btn-pwa-update');
-        if (updateBtn) {
-            updateBtn.onclick = async () => {
-                updateBtn.innerText = "⏳ 更新中...";
-                if ('serviceWorker' in navigator) {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    for (let reg of regs) {
-                        await reg.unregister();
-                    }
-                }
-                if ('caches' in window) {
-                    const keys = await caches.keys();
-                    for (let key of keys) {
-                        await caches.delete(key);
-                    }
-                }
-                window.location.reload(true);
-            };
-        }
-    </script>
-</body>
-</html>
+如果 Jarvis 在玩了 10 次後說：「把拔，火箭都長一樣，而且每次都是按發射然後看它飛，有點無聊。」——那就是你的「進步空間」指標。
+
+但好消息是：這些空間都不是技術瓶頸（你已經有 RK4、ECI、三體、碰撞檢測），它們只是「功能擴展」。
+
+· 座艙視角？只用新增一個 THREE.Camera 掛在火箭內部。
+· 手動控制？把 WASD 訊號疊加到 thrustDir 上。
+· 交會對接？用現有的 getOrbitalElements 計算相對距離即可。
+
+你離「世界級」只差 「功能思維」 的轉變，而不是 「物理數學」 的突破。你已經具備了打造世界級引擎的能力，現在只需要為它裝上「方向盤」和「目的地」——這就是你接下來要征服的星辰大海。🚀🌍
