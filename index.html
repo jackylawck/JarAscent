@@ -2,7 +2,7 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
@@ -14,9 +14,9 @@
     <meta name="theme-color" content="#030712">
 
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
-        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; touch-action: none; }
         
         .ui-overlay { position: absolute; top: 12px; left: 12px; z-index: 100; max-height: 94vh; overflow-y: auto; transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; transform: translateX(0); opacity: 1; }
         .ui-overlay.collapsed { transform: translateX(-420px); opacity: 0; pointer-events: none; }
@@ -62,7 +62,7 @@
         .hud-metric-box { background: rgba(10, 16, 30, 0.75); backdrop-filter: blur(15px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 6px 14px; text-align: right; min-width: 110px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); }
         .hud-metric-label { font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px; font-weight: bold; }
         .hud-metric-val { font-family: 'Courier New', Courier, monospace; font-size: 1.4rem; font-weight: 900; color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
-        @media (max-width: 480px) { .top-hud-bar { top: auto; bottom: 60px; right: 12px; flex-direction: column; gap: 4px; } .hud-metric-box { padding: 4px 8px; min-width: 90px;} .hud-metric-val { font-size: 1.1rem; } }
+        @media (max-width: 480px) { .top-hud-bar { top: auto; bottom: 65px; right: 12px; flex-direction: column; gap: 4px; } .hud-metric-box { padding: 4px 8px; min-width: 90px;} .hud-metric-val { font-size: 1.1rem; } }
 
         .hud-gauge-group { margin-top: 6px; }
         .gauge-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
@@ -83,8 +83,9 @@
         .debrief-rank { font-size: 3.6rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 4px 0; }
         .debrief-stats { text-align: left; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.82rem; margin: 10px 0; line-height: 1.6; }
         
-        .bottom-dock { position: fixed; bottom: 15px; left: 15px; z-index: 200; display: flex; gap: 8px; }
-        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 7px 16px; font-size: 0.82rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
+        /* 🕹️ 底部快捷按鈕組 */
+        .bottom-dock { position: fixed; bottom: 15px; left: 15px; z-index: 200; display: flex; gap: 8px; flex-wrap: wrap; }
+        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 7px 14px; font-size: 0.8rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
         .dock-btn:hover { background: #38bdf8; color: #030712; }
     </style>
 
@@ -122,7 +123,8 @@
 
     <div class="bottom-dock">
         <button class="dock-btn" id="btn-toggle-ui">📋 任務控制面板</button>
-        <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停 (3D 檢視)</button>
+        <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停</button>
+        <button class="dock-btn" id="btn-reset-cam" style="background: rgba(56, 189, 248, 0.2);">🎥 重設視角</button>
     </div>
 
     <div class="ui-overlay" id="ui-overlay-box">
