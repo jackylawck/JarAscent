@@ -138,6 +138,7 @@
         #countdown-timer { font-family: 'Courier New', Courier, monospace; font-size: 6.5rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(249, 115, 22, 0.5); }
         #countdown-subtext { font-size: 1.1rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px; text-transform: uppercase; margin-top: 10px; }
         
+        /* 事故重建黑盒與任務結算卡 */
         #debrief-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(25px); z-index: 200; display: none; align-items: center; justify-content: center; }
         .debrief-card { background: rgba(15, 23, 42, 0.96); border: 2px solid #38bdf8; border-radius: 20px; padding: 22px; width: 440px; text-align: center; box-shadow: 0 0 50px rgba(56, 189, 248, 0.4); max-width: 90vw; }
         .debrief-rank { font-size: 3.2rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 2px 0; }
@@ -166,10 +167,10 @@
     </div>
 
     <div id="rendezvous-hud">
-        <b style="color: #34d399;">🛰️ 空間站交會雷達 (Tiangong)</b><br>
-        • 相對距離: <span id="rdv-dist">---- km</span><br>
-        • 相對速度: <span id="rdv-vel">---- m/s</span><br>
-        • 軌道相位角: <span id="rdv-phase">----°</span>
+        <b style="color: #34d399;" id="lbl-rdv-title">🛰️ 空間站交會雷達 (Tiangong)</b><br>
+        • <span id="lbl-rdv-dist">相對距離</span>: <span id="rdv-dist">---- km</span><br>
+        • <span id="lbl-rdv-vel">相對速度</span>: <span id="rdv-vel">---- m/s</span><br>
+        • <span id="lbl-rdv-phase">軌道相位角</span>: <span id="rdv-phase">----°</span>
     </div>
 
     <div id="manual-control-hud">
