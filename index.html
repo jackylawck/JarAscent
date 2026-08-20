@@ -7,7 +7,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
     
-    <!-- ✅ PWA & 瀏覽器圖標 -->
     <link rel="icon" type="image/png" sizes="192x192" href="JarAscenticon-192.png">
     <link rel="apple-touch-icon" href="JarAscenticon-192.png">
     
@@ -38,15 +37,12 @@
         input:checked + .slider { background-color: #ef4444; }
         input:checked + .slider:before { transform: translateX(20px); }
 
-        /* 🖨️ 3D 打印 STL 拖放上傳區樣式 */
         .stl-drop-zone {
             border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px;
             text-align: center; font-size: 0.72rem; color: #94a3b8; cursor: pointer;
             background: rgba(56, 189, 248, 0.04); margin-bottom: 8px; transition: all 0.2s ease;
         }
-        .stl-drop-zone:hover, .stl-drop-zone.dragover {
-            border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #fff;
-        }
+        .stl-drop-zone:hover, .stl-drop-zone.dragover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #fff; }
         .stl-info { font-size: 0.68rem; color: #fbbf24; margin-top: 4px; display: none; line-height: 1.4; text-align: left; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; }
 
         .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 10px 12px; font-size: 0.88rem; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s; margin-top: 6px; }
@@ -87,12 +83,14 @@
         .debrief-rank { font-size: 3.6rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 4px 0; }
         .debrief-stats { text-align: left; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.82rem; margin: 10px 0; line-height: 1.6; }
         
-        .sidebar-toggle { position: fixed; bottom: 15px; left: 15px; z-index: 200; background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 6px 16px; font-size: 0.85rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
+        /* 🕹️ 底部控制塢 */
+        .bottom-dock { position: fixed; bottom: 15px; left: 15px; z-index: 200; display: flex; gap: 8px; }
+        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 7px 16px; font-size: 0.82rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
+        .dock-btn:hover { background: #38bdf8; color: #030712; }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- 🖨️ 3D 打印 STL 載入解析庫 -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 </head>
 <body>
@@ -123,7 +121,11 @@
         </div>
     </div>
 
-    <button class="sidebar-toggle" id="btn-toggle-ui">📋 任務控制面板</button>
+    <!-- 🕹️ 底部控制區：包含面板切換、暫停與自由視角 -->
+    <div class="bottom-dock">
+        <button class="dock-btn" id="btn-toggle-ui">📋 任務控制面板</button>
+        <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停 (3D 檢視)</button>
+    </div>
 
     <div class="ui-overlay" id="ui-overlay-box">
         <div class="ui-card">
@@ -133,7 +135,6 @@
             </div>
             <p id="ui-subtitle">航太動力學、真實多級分離與 3D 打印沙盒</p>
 
-            <!-- 🖨️ 3D 打印 STL 拖放上傳區 -->
             <div class="stl-drop-zone" id="stl-drop-zone">
                 <span id="lbl-stl-drop">🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)</span>
                 <input type="file" id="stl-file-input" accept=".stl" style="display: none;">
@@ -268,13 +269,5 @@
 
     <div id="canvas-container"></div>
     <script type="module" src="js/rocket_game.js"></script>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW setup failed', err));
-            });
-        }
-    </script>
 </body>
 </html>
