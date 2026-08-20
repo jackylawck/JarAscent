@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D 任務主控 (防空指針健壯版)
+ * js/rocket_game.js - JarAscent 3D 任務主控 (鏡頭鎖定主航天器與動態尾焰)
  * @license MIT
  */
 
@@ -16,8 +16,8 @@ import {
     initRocketScene, setEnvironmentMode, switchRocketMesh, updateEnvironmentVisuals,
     triggerCatastrophicExplosion, updateExplosion, spawnDebrisPiece, updateDebris,
     spawnExhaustParticles, updateExhaustParticles,
-    scene, camera, controls, renderer, rocketGroup, flameMesh,
-    activeRocketParts, machConeMesh, earthMesh, moonMesh, rocketLight
+    scene, camera, controls, renderer, rocketGroup,
+    activeRocketParts, earthMesh, moonMesh, rocketLight
 } from './rocket_engine.js';
 
 let rocket = null;
@@ -46,7 +46,7 @@ let targetLookAt = new THREE.Vector3();
 
 let milestoneShown = { escape: false, boosters: false, fairing: false, stage2: false, orbit: false };
 
-// ==================== 🔊 音效系統 ====================
+// ==================== 🔊 雙層高臨場感航天音效 ====================
 let audioCtx = null;
 let rocketNoiseSource = null;
 let rocketSubOsc = null;
@@ -226,7 +226,7 @@ const I18N = {
         payloadOptions: { "8000": "新一代載人飛船 (8,000 kg)", "15000": "空間站核心艙 (15,000 kg)", "35000": "重型補給艙 (35,000 kg)", "60000": "極限超重載荷 (60,000 kg) ⚠️" },
         milestones: { 
             escape: "🚀 T+20s 拋掉逃逸塔 (Tower Jettison)!", 
-            boosters: "⚡ T+45s 一級/助推器分離 (Stage 1 Sep)!", 
+            boosters: "⚡ T+45s 一級/助推器分離，二級點火 (Stage 1 Sep)!", 
             fairing: "✨ T+60s 拋整流罩 (Fairing Sep)!", 
             stage2: "🛰️ T+110s 二級熄火，入軌成功 (SECO)!", 
             orbit: "🏆 太陽翼展開，入軌圓滿成功!" 
@@ -269,7 +269,7 @@ const I18N = {
         payloadOptions: { "8000": "Crewed Spacecraft (8,000 kg)", "15000": "Space Station Module (15,000 kg)", "35000": "Heavy Cargo Pod (35,000 kg)", "60000": "Extreme Overload Pod (60,000 kg) ⚠️" },
         milestones: { 
             escape: "🚀 T+20s Tower Jettison!", 
-            boosters: "⚡ T+45s Stage 1 Separation!", 
+            boosters: "⚡ T+45s Stage 1 Separation & S2 Ignition!", 
             fairing: "✨ T+60s Fairing Separation!", 
             stage2: "🛰️ T+110s Stage 2 Cutoff & Inserted!", 
             orbit: "🏆 Solar Panels Deployed. Orbit Complete!" 
@@ -291,7 +291,7 @@ function updateStatus(text, color="#38bdf8") { const el = document.getElementByI
 
 function showMilestone(text, color) {
     const el = document.createElement('div');
-    el.style.cssText = `position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 1.6rem; font-weight: 900; color: ${color}; text-shadow: 0 0 20px ${color}, 0 0 40px rgba(0,0,0,0.8); pointer-events: none; z-index: 300; letter-spacing: 1px; animation: milestonePop 2.5s ease-out forwards; font-family: 'Courier New', monospace; text-align: center; width: 90vw;`;
+    el.style.cssText = `position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); font-size: 1.6rem; font-weight: 900; color: ${color}; text-shadow: 0 0 20px ${color}, 0 0 40px rgba(0,0,0,0.8); pointer-events: none; z-index: 300; letter-spacing: 1px; animation: milestonePop 2.5s ease-out forwards; font-family: 'Courier New', monospace; text-align: center; width: 90vw;`;
     el.innerText = text; document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
 }
 
@@ -365,12 +365,6 @@ function handleSTLFile(file) {
             const customGroup = new THREE.Group();
             customGroup.add(mesh);
             rocketGroup.add(customGroup);
-
-            const flameGeo = new THREE.ConeGeometry(0.55, 6.0, 24);
-            flameGeo.translate(0, -3.0, 0);
-            flameMesh = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 }));
-            flameMesh.visible = false;
-            rocketGroup.add(flameMesh);
 
             const grpCustom = document.getElementById('grp-custom');
             if (grpCustom) grpCustom.style.display = 'block';
@@ -527,6 +521,7 @@ function evaluateStructuralLimits(rocket) {
     }
 }
 
+// 🛰️ 真實多級分離時序 + 鏡頭平滑跟隨主航天器
 function handleMultiStageSeparation(rocket) {
     if (rocket.isDestroyed) return;
     const t = rocket.flightTime;
@@ -542,7 +537,7 @@ function handleMultiStageSeparation(rocket) {
     if (t >= 20 && !rocket.escapeTowerSeparated) {
         rocket.escapeTowerSeparated = true;
         if (activeRocketParts && activeRocketParts.escapeTower) {
-            const escapeImpulse = forwardVec.clone().multiplyScalar(35.0);
+            const escapeImpulse = forwardVec.clone().multiplyScalar(40.0);
             spawnDebrisPiece(rocket, activeRocketParts.escapeTower, escapeImpulse);
             activeRocketParts.escapeTower.visible = false;
         }
@@ -551,25 +546,24 @@ function handleMultiStageSeparation(rocket) {
         speakMissionCallout(sp.escape);
     }
 
-    // 2. T+45s: 一級芯級與助推器脫落
+    // 2. T+45s: 一級芯級與助推器脫落，二級接力
     if (t >= 45 && !rocket.boostersSeparated) {
         rocket.boostersSeparated = true;
         rocket.stage = 2;
         
-        const retroImpulse = forwardVec.clone().multiplyScalar(-8.0);
+        const retroImpulse = forwardVec.clone().multiplyScalar(-10.0);
         if (activeRocketParts && activeRocketParts.stage1) {
             spawnDebrisPiece(rocket, activeRocketParts.stage1, retroImpulse);
             activeRocketParts.stage1.visible = false;
         }
         if (activeRocketParts && activeRocketParts.boosters) {
-            const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(8.0));
+            const outImpulse = retroImpulse.clone().add(lateralVec.clone().multiplyScalar(10.0));
             spawnDebrisPiece(rocket, activeRocketParts.boosters, outImpulse);
             activeRocketParts.boosters.visible = false;
         }
 
         playStagingSound();
-        bulletTimeTimer = 2.5;
-        currentCamMode = CAM_MODE.STAGE_SEP;
+        bulletTimeTimer = 2.0;
         showMilestone(ms.boosters, "#f59e0b");
         speakMissionCallout(sp.boosters);
     }
@@ -579,11 +573,11 @@ function handleMultiStageSeparation(rocket) {
         rocket.fairingSeparated = true;
         
         if (activeRocketParts && activeRocketParts.fairingL) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-14.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingL, lateralVec.clone().multiplyScalar(-16.0));
             activeRocketParts.fairingL.visible = false;
         }
         if (activeRocketParts && activeRocketParts.fairingR) {
-            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(14.0));
+            spawnDebrisPiece(rocket, activeRocketParts.fairingR, lateralVec.clone().multiplyScalar(16.0));
             activeRocketParts.fairingR.visible = false;
         }
 
@@ -629,14 +623,6 @@ function updateTelemetryValues() {
     const qBar = document.getElementById('gauge-q-bar');
     if (qBar) qBar.style.width = `${Math.min(100, (dynQkPa / 55) * 100)}%`;
     setText('gauge-q-txt', `${dynQkPa.toFixed(1)} kPa`);
-    
-    if (machConeMesh) {
-        const isTransonic = (airSpeed > 320 && airSpeed < 430 && alt < 25000);
-        machConeMesh.visible = isTransonic;
-        if (isTransonic) {
-            machConeMesh.material.opacity = 0.2;
-        }
-    }
 
     const currentTwr = rocket.getThrustVector().length() / (rocket.getCurrentMass() * 9.80665);
     setText('t-twr', currentTwr.toFixed(2));
@@ -645,7 +631,7 @@ function updateTelemetryValues() {
     let stageName = `${rocket.engine ? (currentLang==='zh'?rocket.engine.name:rocket.engine.nameEn) : 'Custom STL'} (${t.ascending})`;
     if (rocket.isDestroyed) stageName = "💥 CATASTROPHIC FAILURE";
     else if (rocket.stage2Separated) stageName = "🛰️ 300km Orbit Cruise";
-    else if (rocket.boostersSeparated) stageName = "Stage 2 Burn";
+    else if (rocket.stage === 2) stageName = "Stage 2 Upper Stage";
     setText('t-stage-name', stageName);
     setText('t-orbit', orbit.isOrbital ? t.stableOrbit : t.ascending);
 
@@ -830,7 +816,7 @@ function bindUI() {
 
     if (controls) {
         controls.addEventListener('start', () => { userInteractingWithCamera = true; });
-        controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2000); });
+        controls.addEventListener('end', () => { setTimeout(() => { userInteractingWithCamera = false; }, 2500); });
     }
 
     const dropZone = document.getElementById('stl-drop-zone');
@@ -906,13 +892,13 @@ function gameLoop(now) {
         evaluateStructuralLimits(rocket);
         handleMultiStageSeparation(rocket);
         updateDebris(dt * currentEffectiveTimeScale);
+        updateExhaustParticles(dt * currentEffectiveTimeScale);
 
         const alt = Math.max(0, rocket.r.length() - R_EARTH);
         const speed = rocket.v.length();
         
         const thrustMag = rocket.getThrustVector().length();
         updateRocketRumble(alt, thrustMag > 0 ? (rocket.throttle || 1.0) : 0.0);
-
         updateEnvironmentVisuals(alt);
         
         const visualAlt = (alt < 5000) ? 0.4 + (alt * 0.035) : 0.4 + (5000 * 0.035) + (alt - 5000) * WORLD_SCALE;
@@ -924,6 +910,13 @@ function gameLoop(now) {
         
         const thrustDir = rocket.thrustDir.clone().normalize();
         rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), thrustDir);
+
+        // 🎯 計算當前點火發動機的真實世界坐標 (一級底部 vs 二級底部)
+        const nozzleOffset = (rocket.stage === 2) ? 3.5 * visualScale : 0.2 * visualScale;
+        const currentNozzlePos = visualPos.clone().add(thrustDir.clone().multiplyScalar(nozzleOffset));
+
+        // 🎯 鏡頭永遠精確鎖定主飛行器（第二級/太空船中心）
+        const craftFocusPos = visualPos.clone().add(thrustDir.clone().multiplyScalar(4.5 * visualScale));
 
         if (!userInteractingWithCamera) {
             if (bulletTimeTimer <= 0) {
@@ -940,42 +933,37 @@ function gameLoop(now) {
 
             switch (currentCamMode) {
                 case CAM_MODE.LIFTOFF:
-                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(-14 + shakeX, 6 + shakeY, 14)));
-                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 4, 0))); break;
+                    targetCamPos.copy(craftFocusPos.clone().add(new THREE.Vector3(-14 + shakeX, 4 + shakeY, 14)));
+                    targetLookAt.copy(craftFocusPos); break;
                 case CAM_MODE.MAX_Q:
-                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(30 + shakeX, 5 + shakeY, 0)));
-                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
+                    targetCamPos.copy(craftFocusPos.clone().add(new THREE.Vector3(26 + shakeX, 3 + shakeY, 0)));
+                    targetLookAt.copy(craftFocusPos); break;
                 case CAM_MODE.STAGE_SEP:
-                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), 4, 12 * Math.sin(now * 0.002))));
-                    targetLookAt.copy(visualPos); break;
+                    targetCamPos.copy(craftFocusPos.clone().add(new THREE.Vector3(12 * Math.cos(now * 0.002), -2, 12 * Math.sin(now * 0.002))));
+                    targetLookAt.copy(craftFocusPos); break;
                 case CAM_MODE.ORBIT:
                     const safeA = (orbit && !isNaN(orbit.semiMajorAxis) && orbit.semiMajorAxis > 0) ? orbit.semiMajorAxis : 6678137;
-                    const orbitCamDist = Math.max(500, safeA * WORLD_SCALE * 1.2);
-                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.5, orbitCamDist)));
+                    const orbitCamDist = Math.max(400, safeA * WORLD_SCALE * 1.1);
+                    targetCamPos.copy(craftFocusPos.clone().add(new THREE.Vector3(0, orbitCamDist * 0.4, orbitCamDist)));
                     targetLookAt.set(0, 0, 0); break;
                 case CAM_MODE.ASCEND:
                 default:
-                    let camDist = (alt < 2000) ? 25 + alt * 0.015 : 60;
-                    targetCamPos.copy(visualPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.25 + shakeY, camDist * 0.8)));
-                    targetLookAt.copy(visualPos.clone().add(new THREE.Vector3(0, 3, 0))); break;
+                    let camDist = (alt < 2000) ? 22 + alt * 0.012 : 50;
+                    targetCamPos.copy(craftFocusPos.clone().add(new THREE.Vector3(camDist * 0.35 + shakeX, camDist * 0.15 + shakeY, camDist * 0.75)));
+                    targetLookAt.copy(craftFocusPos); break;
             }
 
             camera.position.lerp(targetCamPos, 0.08); 
-            controls.target.lerp(targetLookAt, 0.09);
+            controls.target.lerp(targetLookAt, 0.1);
         } else {
-            controls.target.copy(visualPos);
+            controls.target.copy(craftFocusPos);
         }
 
+        // 🔥 動態發射尾焰（一級橘紅大氣火焰 / 二級深藍真空羽流）
         if (thrustMag > 1000) {
-            if (flameMesh) { 
-                flameMesh.visible = true; 
-                flameMesh.material.color.setHex(0xffaa00);
-                flameMesh.scale.set(1.0, rocket.throttle || 1.0, 1.0); 
-            }
-            spawnExhaustParticles(visualPos, rocket.throttle * visualScale, alt < 3000);
-            if (rocketLight) { rocketLight.position.copy(visualPos); rocketLight.intensity = 6.0; }
+            spawnExhaustParticles(currentNozzlePos, thrustDir, rocket.throttle || 1.0, rocket.stage === 2, alt > 35000);
+            if (rocketLight) { rocketLight.position.copy(currentNozzlePos); rocketLight.intensity = 7.0; }
         } else {
-            if (flameMesh) flameMesh.visible = false;
             if (rocketLight) rocketLight.intensity = 0.0;
         }
         
@@ -984,8 +972,8 @@ function gameLoop(now) {
     } else {
         stopRocketRumble();
         if (rocketGroup && !rocket) { rocketGroup.quaternion.set(0, 0, 0, 1); rocketGroup.position.set(0, 1000.4, 0); }
-        if (flameMesh) flameMesh.visible = false;
         if (machConeMesh) machConeMesh.visible = false;
+        if (rocketLight) rocketLight.intensity = 0.0;
     }
 
     if (controls) controls.update();
