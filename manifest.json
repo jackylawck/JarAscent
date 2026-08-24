@@ -1,23 +1,24 @@
 {
-  "name": "躍上穹蒼 3D | JarAscent",
-  "short_name": "JarAscent",
-  "description": "航太級天體動力學沙盒",
+  "name": "J.A.R. 躍上穹蒼 3D | Joint Applied Research",
+  "short_name": "JAR 躍上穹蒼",
+  "description": "J.A.R. 聯合應用科學探索沙盒：基於 Three.js、RK4 數值積分與真實天體力學打造的 3D 運載火箭與軌道模擬器。",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#020617",
+  "background_color": "#010409",
   "theme_color": "#030712",
+  "orientation": "any",
   "icons": [
     {
-      "src": "./JarAscenticon-192.png",
+      "src": "JarAscenticon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "./JarAscenticon-512.png",
+      "src": "JarAscenticon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["education", "games", "simulation"]
 }
