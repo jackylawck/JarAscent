@@ -8,13 +8,13 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#030712">
 
-    <!-- 🔍 Google 網站驗證 (若有專屬驗證碼可替換) -->
+    <!-- 🔍 Google 網站驗證 -->
     <meta name="google-site-verification" content="JZ5UohX-CcP_fQV0_DI9VadkKY4ZoTTkUifL88-fIcY" />
 
     <!-- 🌐 國際與亞洲雙語 SEO 標籤 (Bilingual Global SEO) -->
-    <title>🚀 躍上穹蒼 | JarAscent - 3D Rocket & Orbital Simulator</title>
-    <meta name="description" content="JarAscent is a high-fidelity WebGL 3D Rocket Launch & Orbital Mechanics Sandbox featuring RK4 integration, J2 perturbation, 3D printing STL wind tunnel & Tiangong rendezvous. 依據真實天體力學（RK4/J2攝動/PBR）打造的 3D 運載火箭模擬器與 3D 打印航太沙盒。">
-    <meta name="keywords" content="JarAscent, Rocket Simulator, 3D Rocket Launch, Orbital Mechanics, Three.js, WebGL, RK4, J2 Perturbation, Spaceflight Sandbox, 3D Printing Rocket, 躍上穹蒼, 火箭模擬器, 軌道力學, 航天模擬, 長征十號, 星艦, 3D打印火箭, 天宮空間站交會">
+    <title>J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)</title>
+    <meta name="description" content="J.A.R. Ascent 3D (Joint Applied Research) is a high-fidelity WebGL 3D rocket & orbital dynamics simulator featuring explicit RK4 integration, J2 perturbation & 3D print STL aerodynamics. J.A.R. 聯合應用科學探索：結合嚴謹數值物理與真實天體力學的航太模擬沙盒。">
+    <meta name="keywords" content="J.A.R., Joint Applied Research, 聯合應用科學探索, JarAscent, Rocket Simulator, 3D Rocket Launch, Orbital Mechanics, Three.js, WebGL, RK4, J2 Perturbation, 躍上穹蒼, 火箭模擬器, 軌道力學, 航天模擬, 長征十號, 星艦, 3D打印火箭, 天宮空間站交會">
     <meta name="author" content="羅子淇 Jacky Law">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://jackylawck.github.io/JarAscent/">
@@ -22,14 +22,14 @@
     <!-- 📱 全球社群分享 Open Graph (WhatsApp, Discord, Reddit, Facebook) -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://jackylawck.github.io/JarAscent/">
-    <meta property="og:title" content="🚀 躍上穹蒼 3D | JarAscent 3D">
-    <meta property="og:description" content="High-fidelity 3D Rocket Launch & Orbital Mechanics Sandbox in WebGL (Three.js + RK4 + PWA).">
+    <meta property="og:title" content="J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)">
+    <meta property="og:description" content="J.A.R. Applied Science Matrix: High-fidelity 3D Rocket Launch & Orbital Mechanics Sandbox in WebGL (Three.js + RK4 + PWA).">
     <meta property="og:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
 
     <!-- 🐦 Twitter Card 標籤 -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="https://jackylawck.github.io/JarAscent/">
-    <meta name="twitter:title" content="🚀 JarAscent 3D | Aerospace Physics Simulator">
+    <meta name="twitter:title" content="J.A.R. Ascent 3D | Joint Applied Research">
     <meta name="twitter:description" content="Explore real-time rocket trajectory, gravity turn, staging physics and space station rendezvous in 3D WebGL.">
     <meta name="twitter:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
 
@@ -38,10 +38,10 @@
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "JarAscent 3D",
-      "alternateName": "躍上穹蒼 3D",
+      "name": "J.A.R. Ascent 3D",
+      "alternateName": "J.A.R. 躍上穹蒼 3D - 聯合應用科學探索",
       "url": "https://jackylawck.github.io/JarAscent/",
-      "description": "A high-fidelity WebGL aerospace rocket launch and orbital mechanics simulator built with Three.js, RK4 numerical integration, J2 perturbation, and customizable 3D print STL models.",
+      "description": "A high-fidelity WebGL aerospace rocket launch and orbital mechanics simulator built under the J.A.R. (Joint Applied Research) matrix, featuring explicit RK4 mass conservation, J2 perturbation, and customizable 3D print STL models.",
       "applicationCategory": "EducationalApplication, SimulationApplication",
       "operatingSystem": "All",
       "browserRequirements": "Requires JavaScript. Requires WebGL / HTML5.",
@@ -265,10 +265,10 @@
     <div class="ui-overlay" id="ui-overlay-box">
         <div class="ui-card">
             <div class="header-row">
-                <h1 id="ui-title">🚀 躍上穹蒼 3D</h1>
+                <h1 id="ui-title">🚀 J.A.R. 躍上穹蒼 3D</h1>
                 <button class="lang-btn" id="btn-lang">English</button>
             </div>
-            <p id="ui-subtitle">航太動力學、多級分離與 3D 打印沙盒 (Master Edition)</p>
+            <p id="ui-subtitle">聯合應用科學探索 ｜ 航太動力學與 3D 打印沙盒 (Master Edition)</p>
 
             <div class="stl-drop-zone" id="stl-drop-zone" title="支援 STL 格式 3D 打印模型，自動估算截面積與乾重">
                 <span id="lbl-stl-drop">🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)</span>
