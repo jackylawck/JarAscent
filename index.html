@@ -11,7 +11,11 @@
     <!-- 🔍 Google 網站驗證 -->
     <meta name="google-site-verification" content="JZ5UohX-CcP_fQV0_DI9VadkKY4ZoTTkUifL88-fIcY" />
 
-    <!-- 🌐 國際與亞洲雙語 SEO 標籤 (Bilingual Global SEO) -->
+    <!-- 🛡️ 企業級安全策略 (Strict CSP & Permissions Policy) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=()">
+
+    <!-- 🌐 雙語 SEO 標籤 -->
     <title>J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)</title>
     <meta name="description" content="J.A.R. Ascent 3D (Joint Applied Research) is a high-fidelity WebGL 3D rocket & orbital dynamics simulator featuring explicit RK4 integration, J2 perturbation & 3D print STL aerodynamics. J.A.R. 聯合應用科學探索：結合嚴謹數值物理與真實天體力學的航太模擬沙盒。">
     <meta name="keywords" content="J.A.R., Joint Applied Research, 聯合應用科學探索, JarAscent, Rocket Simulator, 3D Rocket Launch, Orbital Mechanics, Three.js, WebGL, RK4, J2 Perturbation, 躍上穹蒼, 火箭模擬器, 軌道力學, 航天模擬, 長征十號, 星艦, 3D打印火箭, 天宮空間站交會">
@@ -19,7 +23,7 @@
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://jackylawck.github.io/JarAscent/">
 
-    <!-- 📱 全球社群分享 Open Graph (WhatsApp, Discord, Reddit, Facebook) -->
+    <!-- 📱 全球社群分享 Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://jackylawck.github.io/JarAscent/">
     <meta property="og:title" content="J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)">
@@ -33,7 +37,7 @@
     <meta name="twitter:description" content="Explore real-time rocket trajectory, gravity turn, staging physics and space station rendezvous in 3D WebGL.">
     <meta name="twitter:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
 
-    <!-- 🔍 Google 結構化資料 (Schema.org JSON-LD 全球爬蟲加速) -->
+    <!-- 🔍 Google 結構化資料 (Schema.org JSON-LD) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -57,9 +61,6 @@
       }
     }
     </script>
-
-    <!-- 🛡️ CSP 安全防護 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self'; img-src 'self' data: blob:;">
 
     <!-- PWA 與圖示設定 -->
     <link rel="manifest" href="manifest.json">
@@ -204,9 +205,23 @@
         .dock-btn:hover { background: #38bdf8; color: #030712; }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <!-- 🛡️ 企業級 SRI 雜湊防禦載入 (Subresource Integrity Validation) -->
+    <script 
+        src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" 
+        integrity="sha512-dLxUelApnYxp088iOxakfoqqtL2umaSm+2L0lU1i5b4vB2E5c9Z84pB4WvB8i6I/U5Qd0aXvK5u7O/hW7vXmrg==" 
+        crossorigin="anonymous" 
+        referrerpolicy="no-referrer">
+    </script>
+    <script 
+        src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" 
+        crossorigin="anonymous" 
+        referrerpolicy="no-referrer">
+    </script>
+    <script 
+        src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js" 
+        crossorigin="anonymous" 
+        referrerpolicy="no-referrer">
+    </script>
 </head>
 <body>
     <div id="cockpit-overlay">
@@ -230,6 +245,17 @@
 
     <div id="countdown-hud">
         <div id="countdown-timer">T-10</div><div id="countdown-subtext">TERMINAL COUNTDOWN SEQUENCE</div>
+    </div>
+
+    <!-- ⚖️ 法律與 AI 合規彈窗 (Legal & AI Compliance Modal) -->
+    <div id="legal-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(20px); z-index: 250; display: none; align-items: center; justify-content: center;">
+        <div style="background: rgba(15, 23, 42, 0.96); border: 1px solid #38bdf8; border-radius: 16px; padding: 20px; width: 560px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(56, 189, 248, 0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 8px;">
+                <h3 id="legal-modal-title" style="color: #38bdf8; font-size: 1.05rem; margin: 0;">⚖️ 法律合規與隱私聲明</h3>
+                <button id="btn-close-legal" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; font-weight: bold;">✕</button>
+            </div>
+            <div id="legal-modal-body" style="overflow-y: auto; font-size: 0.75rem; line-height: 1.6; color: #cbd5e1; padding-right: 8px;"></div>
+        </div>
     </div>
 
     <div id="debrief-modal">
@@ -259,6 +285,7 @@
         <button class="dock-btn" id="btn-cockpit" style="background: rgba(99, 102, 241, 0.2); border-color: #818cf8; color: #a5b4fc;">🪟 座艙視角 (C)</button>
         <button class="dock-btn" id="btn-pause" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fbbf24;">⏸️ 暫停</button>
         <button class="dock-btn" id="btn-reset-cam" style="background: rgba(56, 189, 248, 0.2);">🎥 重設視角</button>
+        <button class="dock-btn" id="btn-legal-notice" style="background: rgba(148, 163, 184, 0.2); border-color: #94a3b8; color: #cbd5e1;">⚖️ 合規條款</button>
         <button class="dock-btn" id="btn-pwa-update" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;">🔄 檢查更新</button>
     </div>
 
