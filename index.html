@@ -11,56 +11,13 @@
     <!-- 🔍 Google 網站驗證 -->
     <meta name="google-site-verification" content="JZ5UohX-CcP_fQV0_DI9VadkKY4ZoTTkUifL88-fIcY" />
 
-    <!-- 🛡️ 企業級安全策略 (Strict CSP & Permissions Policy) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
-    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=()">
+    <!-- 🛡️ 企業級相容 CSP 策略 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self';">
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=()">
 
-    <!-- 🌐 雙語 SEO 標籤 -->
     <title>J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)</title>
-    <meta name="description" content="J.A.R. Ascent 3D (Joint Applied Research) is a high-fidelity WebGL 3D rocket & orbital dynamics simulator featuring explicit RK4 integration, J2 perturbation & 3D print STL aerodynamics. J.A.R. 聯合應用科學探索：結合嚴謹數值物理與真實天體力學的航太模擬沙盒。">
-    <meta name="keywords" content="J.A.R., Joint Applied Research, 聯合應用科學探索, JarAscent, Rocket Simulator, 3D Rocket Launch, Orbital Mechanics, Three.js, WebGL, RK4, J2 Perturbation, 躍上穹蒼, 火箭模擬器, 軌道力學, 航天模擬, 長征十號, 星艦, 3D打印火箭, 天宮空間站交會">
-    <meta name="author" content="羅子淇 Jacky Law">
-    <meta name="robots" content="index, follow">
+    <meta name="description" content="J.A.R. Ascent 3D: 聯合應用科學探索 ｜ 基於 Three.js 與真實天體物理的 3D 火箭模擬沙盒。">
     <link rel="canonical" href="https://jackylawck.github.io/JarAscent/">
-
-    <!-- 📱 全球社群分享 Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://jackylawck.github.io/JarAscent/">
-    <meta property="og:title" content="J.A.R. 躍上穹蒼 3D | 聯合應用科學探索 (Joint Applied Research)">
-    <meta property="og:description" content="J.A.R. Applied Science Matrix: High-fidelity 3D Rocket Launch & Orbital Mechanics Sandbox in WebGL (Three.js + RK4 + PWA).">
-    <meta property="og:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
-
-    <!-- 🐦 Twitter Card 標籤 -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://jackylawck.github.io/JarAscent/">
-    <meta name="twitter:title" content="J.A.R. Ascent 3D | Joint Applied Research">
-    <meta name="twitter:description" content="Explore real-time rocket trajectory, gravity turn, staging physics and space station rendezvous in 3D WebGL.">
-    <meta name="twitter:image" content="https://jackylawck.github.io/JarAscent/JarAscenticon-512.png">
-
-    <!-- 🔍 Google 結構化資料 (Schema.org JSON-LD) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "J.A.R. Ascent 3D",
-      "alternateName": "J.A.R. 躍上穹蒼 3D - 聯合應用科學探索",
-      "url": "https://jackylawck.github.io/JarAscent/",
-      "description": "A high-fidelity WebGL aerospace rocket launch and orbital mechanics simulator built under the J.A.R. (Joint Applied Research) matrix, featuring explicit RK4 mass conservation, J2 perturbation, and customizable 3D print STL models.",
-      "applicationCategory": "EducationalApplication, SimulationApplication",
-      "operatingSystem": "All",
-      "browserRequirements": "Requires JavaScript. Requires WebGL / HTML5.",
-      "inLanguage": ["en", "zh-HK", "zh-TW"],
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "author": {
-        "@type": "Person",
-        "name": "Jacky Law"
-      }
-    }
-    </script>
 
     <!-- PWA 與圖示設定 -->
     <link rel="manifest" href="manifest.json">
@@ -69,22 +26,19 @@
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; touch-action: none; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #010409; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* 🕹️ 3A 遊戲 HUD 設計 */
         .top-hud-bar { position: absolute; top: 14px; right: 14px; z-index: 100; display: flex; gap: 10px; pointer-events: none; }
         .hud-metric-box { 
             background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(16px); 
             border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px; 
             padding: 8px 14px; text-align: right; min-width: 120px; 
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 15px rgba(56, 189, 248, 0.15); 
-            transition: border-color 0.3s, transform 0.2s;
         }
         .hud-metric-label { font-size: 0.62rem; color: #94a3b8; letter-spacing: 1.5px; font-weight: 800; text-transform: uppercase; }
-        .hud-metric-val { font-family: 'Courier New', Courier, monospace; font-size: 1.35rem; font-weight: 900; color: #38bdf8; transition: color 0.4s, transform 0.2s; }
+        .hud-metric-val { font-family: 'Courier New', Courier, monospace; font-size: 1.35rem; font-weight: 900; color: #38bdf8; }
         
-        /* 🛰️ 空間站交會雷達 HUD */
         #rendezvous-hud {
             position: absolute; top: 85px; right: 14px; z-index: 100; display: none;
             background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(16px);
@@ -93,7 +47,6 @@
             min-width: 220px; text-align: left; font-size: 0.75rem; color: #6ee7b7; line-height: 1.5;
         }
 
-        /* 🎮 WASD 手動操控提示浮窗 */
         #manual-control-hud {
             position: absolute; bottom: 85px; left: 14px; z-index: 100; display: none;
             background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px);
@@ -102,32 +55,16 @@
             pointer-events: none;
         }
 
-        /* 座艙舷窗遮罩 (Cockpit View Overlay) */
         #cockpit-overlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             pointer-events: none; z-index: 50; display: none;
             background: radial-gradient(circle at center, transparent 48%, rgba(5, 10, 20, 0.85) 68%, #030712 100%);
             border: 14px solid rgba(15, 23, 42, 0.9);
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
         }
         .cockpit-crosshair {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 120px; height: 120px; border: 1px dashed rgba(56, 189, 248, 0.4); border-radius: 50%;
         }
-
-        @keyframes sonicBoomFlash {
-            0% { transform: scale(1); filter: drop-shadow(0 0 0px #fff); }
-            50% { transform: scale(1.18); filter: drop-shadow(0 0 18px #38bdf8); color: #fff; }
-            100% { transform: scale(1); filter: drop-shadow(0 0 8px #38bdf8); }
-        }
-        .sonic-boom { animation: sonicBoomFlash 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-
-        @keyframes dangerPulse {
-            0% { transform: scale(1); filter: drop-shadow(0 0 2px #ef4444); }
-            50% { transform: scale(1.08); filter: drop-shadow(0 0 12px #ef4444); color: #fca5a5; }
-            100% { transform: scale(1); filter: drop-shadow(0 0 2px #ef4444); }
-        }
-        .pulse-danger { animation: dangerPulse 0.6s infinite ease-in-out; }
 
         @media (max-width: 480px) { 
             .top-hud-bar { top: auto; bottom: 80px; right: 12px; flex-direction: column; gap: 4px; } 
@@ -136,7 +73,6 @@
             #rendezvous-hud { top: 12px; right: 12px; font-size: 0.68rem; min-width: 180px; }
         }
 
-        /* 📋 駕駛艙控制面板 */
         .ui-overlay { position: absolute; top: 14px; left: 14px; z-index: 100; max-height: 92vh; overflow-y: auto; transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; transform: translateX(0); opacity: 1; }
         .ui-overlay.collapsed { transform: translateX(-430px); opacity: 0; pointer-events: none; }
         .ui-card { background: rgba(10, 16, 30, 0.94); backdrop-filter: blur(24px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; padding: 14px; width: 370px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.2); }
@@ -145,7 +81,6 @@
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         h1 { font-size: 1.15rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; margin: 0; }
         .lang-btn { background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; padding: 6px 12px; min-height: 32px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
-        .lang-btn:hover { background: #38bdf8; color: #030712; }
         p { font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.3; }
         
         .mode-toggle-box { background: rgba(0,0,0,0.35); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.08); }
@@ -156,26 +91,20 @@
         input:checked + .slider { background-color: #ef4444; }
         input:checked + .slider:before { transform: translateX(20px); }
 
-        .stl-drop-zone {
-            border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px;
-            text-align: center; font-size: 0.72rem; color: #94a3b8; cursor: pointer;
-            background: rgba(56, 189, 248, 0.04); margin-bottom: 8px; transition: all 0.2s ease; min-height: 44px; display: flex; align-items: center; justify-content: center;
-        }
-        .stl-drop-zone:hover, .stl-drop-zone.dragover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #fff; }
+        .stl-drop-zone { border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px; text-align: center; font-size: 0.72rem; color: #94a3b8; cursor: pointer; background: rgba(56, 189, 248, 0.04); margin-bottom: 8px; }
         .stl-info { font-size: 0.68rem; color: #fbbf24; margin-top: 4px; display: none; line-height: 1.4; text-align: left; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; }
 
-        .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 12px 14px; min-height: 44px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); transition: transform 0.1s; margin-top: 6px; display: flex; align-items: center; justify-content: center; }
-        .btn:active { transform: scale(0.98); }
+        .btn { background: linear-gradient(135deg, #f97316, #fb923c); color: #fff; border: none; padding: 12px 14px; min-height: 44px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); margin-top: 6px; display: flex; align-items: center; justify-content: center; }
         .btn-reset { background: #1e293b; border: 1px solid rgba(255,255,255,0.2); }
         .btn-retry { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
         
-        .status-banner { font-size: 0.8rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
+        .status-banner { font-size: 0.8rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; min-height: 20px; }
         .config-panel { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.08); }
         .config-panel h3 { font-size: 0.8rem; color: #fbbf24; margin-bottom: 6px; }
         .config-sub-section { font-size: 0.72rem; color: #38bdf8; font-weight: bold; margin: 8px 0 4px 0; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 2px; }
         
         .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.72rem; min-height: 32px; }
-        .form-row label { color: #cbd5e1; cursor: help; text-decoration: underline dotted rgba(56, 189, 248, 0.5); }
+        .form-row label { color: #cbd5e1; }
         .form-row select, .form-row input[type="range"] { background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 4px 6px; font-size: 0.72rem; width: 55%; min-height: 28px; }
         
         .hud-gauge-group { margin-top: 6px; }
@@ -185,53 +114,36 @@
         
         .debug-panel { font-family: 'Courier New', Courier, monospace; font-size: 0.72rem; color: #38bdf8; background: rgba(3, 7, 18, 0.85); padding: 8px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); margin-top: 8px; line-height: 1.4; }
         .debug-panel h4 { color: #fbbf24; margin-bottom: 4px; font-size: 0.75rem; border-bottom: 1px solid rgba(251, 191, 36, 0.3); padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
-        .toggle-detail-btn { background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.65rem; border-radius: 4px; padding: 4px 8px; min-height: 24px; cursor: pointer; font-weight: bold; }
+        .toggle-detail-btn { background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.65rem; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-weight: bold; }
         #telemetry-detail-box { display: none; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(56, 189, 248, 0.25); }
 
         #countdown-hud { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 150; display: none; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 40%, rgba(3, 7, 18, 0.75) 90%); }
-        #countdown-timer { font-family: 'Courier New', Courier, monospace; font-size: 6.5rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(249, 115, 22, 0.5); }
-        #countdown-subtext { font-size: 1.1rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px; text-transform: uppercase; margin-top: 10px; }
+        #countdown-timer { font-family: 'Courier New', Courier, monospace; font-size: 6.5rem; font-weight: 900; color: #fbbf24; }
+        #countdown-subtext { font-size: 1.1rem; color: #38bdf8; font-weight: bold; letter-spacing: 4px; margin-top: 10px; }
         
-        /* 事故重建黑盒與任務結算卡 */
         #debrief-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(25px); z-index: 200; display: none; align-items: center; justify-content: center; }
-        .debrief-card { background: rgba(15, 23, 42, 0.96); border: 2px solid #38bdf8; border-radius: 20px; padding: 22px; width: 440px; text-align: center; box-shadow: 0 0 50px rgba(56, 189, 248, 0.4); max-width: 90vw; }
-        .debrief-rank { font-size: 3.2rem; font-weight: 900; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; margin: 2px 0; }
+        .debrief-card { background: rgba(15, 23, 42, 0.96); border: 2px solid #38bdf8; border-radius: 20px; padding: 22px; width: 440px; text-align: center; max-width: 90vw; }
+        .debrief-rank { font-size: 3.2rem; font-weight: 900; color: #fbbf24; margin: 2px 0; }
         .debrief-stats { text-align: left; background: rgba(0,0,0,0.45); padding: 10px 14px; border-radius: 8px; font-family: monospace; font-size: 0.8rem; margin: 8px 0; line-height: 1.6; border: 1px solid rgba(255,255,255,0.08); }
-        .diagnostic-box { text-align: left; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 4px; margin-top: 6px; font-size: 0.75rem; line-height: 1.4; color: #fca5a5; }
-        .recommendation-box { text-align: left; background: rgba(16, 185, 129, 0.12); border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 4px; margin-top: 6px; font-size: 0.75rem; line-height: 1.4; color: #6ee7b7; }
+        .diagnostic-box { text-align: left; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 4px; margin-top: 6px; font-size: 0.75rem; color: #fca5a5; }
+        .recommendation-box { text-align: left; background: rgba(16, 185, 129, 0.12); border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 4px; margin-top: 6px; font-size: 0.75rem; color: #6ee7b7; }
         
         .bottom-dock { position: fixed; bottom: 15px; left: 15px; z-index: 200; display: flex; gap: 8px; flex-wrap: wrap; }
-        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 9px 16px; min-height: 44px; font-size: 0.82rem; cursor: pointer; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); display: flex; align-items: center; justify-content: center; }
-        .dock-btn:hover { background: #38bdf8; color: #030712; }
+        .dock-btn { background: rgba(10, 16, 30, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 30px; color: #38bdf8; font-weight: 800; padding: 9px 16px; min-height: 44px; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     </style>
 
-    <!-- 🛡️ 企業級 SRI 雜湊防禦載入 (Subresource Integrity Validation) -->
-    <script 
-        src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" 
-        integrity="sha512-dLxUelApnYxp088iOxakfoqqtL2umaSm+2L0lU1i5b4vB2E5c9Z84pB4WvB8i6I/U5Qd0aXvK5u7O/hW7vXmrg==" 
-        crossorigin="anonymous" 
-        referrerpolicy="no-referrer">
-    </script>
-    <script 
-        src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" 
-        crossorigin="anonymous" 
-        referrerpolicy="no-referrer">
-    </script>
-    <script 
-        src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js" 
-        crossorigin="anonymous" 
-        referrerpolicy="no-referrer">
-    </script>
+    <!-- 📦 穩定相容 CDN 腳本載入 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 </head>
 <body>
-    <div id="cockpit-overlay">
-        <div class="cockpit-crosshair"></div>
-    </div>
+    <div id="cockpit-overlay"><div class="cockpit-crosshair"></div></div>
 
     <div class="top-hud-bar">
-        <div class="hud-metric-box" id="hud-box-time"><div class="hud-metric-label" id="hud-lbl-time">飛行時間 T+</div><div class="hud-metric-val" id="hud-time">0.0s</div></div>
-        <div class="hud-metric-box" id="hud-box-alt"><div class="hud-metric-label" id="hud-lbl-alt">海拔高度</div><div class="hud-metric-val" id="hud-alt">0.0 km</div></div>
-        <div class="hud-metric-box" id="hud-box-vel"><div class="hud-metric-label" id="hud-lbl-vel">即時地速</div><div class="hud-metric-val" id="hud-vel">0 m/s</div></div>
+        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-time">飛行時間 T+</div><div class="hud-metric-val" id="hud-time">0.0s</div></div>
+        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-alt">海拔高度</div><div class="hud-metric-val" id="hud-alt">0.0 km</div></div>
+        <div class="hud-metric-box"><div class="hud-metric-label" id="hud-lbl-vel">即時地速</div><div class="hud-metric-val" id="hud-vel">0 m/s</div></div>
     </div>
 
     <div id="rendezvous-hud">
@@ -247,11 +159,10 @@
         <div id="countdown-timer">T-10</div><div id="countdown-subtext">TERMINAL COUNTDOWN SEQUENCE</div>
     </div>
 
-    <!-- ⚖️ 法律與 AI 合規彈窗 (Legal & AI Compliance Modal) -->
     <div id="legal-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(20px); z-index: 250; display: none; align-items: center; justify-content: center;">
-        <div style="background: rgba(15, 23, 42, 0.96); border: 1px solid #38bdf8; border-radius: 16px; padding: 20px; width: 560px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(56, 189, 248, 0.3);">
+        <div style="background: rgba(15, 23, 42, 0.96); border: 1px solid #38bdf8; border-radius: 16px; padding: 20px; width: 560px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 8px;">
-                <h3 id="legal-modal-title" style="color: #38bdf8; font-size: 1.05rem; margin: 0;">⚖️ 法律合規與隱私聲明</h3>
+                <h3 style="color: #38bdf8; font-size: 1.05rem; margin: 0;">⚖️ 法律合規與隱私聲明</h3>
                 <button id="btn-close-legal" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; font-weight: bold;">✕</button>
             </div>
             <div id="legal-modal-body" style="overflow-y: auto; font-size: 0.75rem; line-height: 1.6; color: #cbd5e1; padding-right: 8px;"></div>
@@ -275,7 +186,7 @@
             <div class="recommendation-box" id="debrief-rec-box" style="display: none;"></div>
             <div style="display: flex; gap: 8px; margin-top: 10px;">
                 <button class="btn btn-retry" id="btn-quick-retry">⚡ 再次挑戰 (保留設定)</button>
-                <button class="btn btn-reset" id="btn-debrief-restart" onclick="location.reload()">🔄 重設全部</button>
+                <button class="btn btn-reset" onclick="location.reload()">🔄 重設全部</button>
             </div>
         </div>
     </div>
@@ -297,7 +208,7 @@
             </div>
             <p id="ui-subtitle">聯合應用科學探索 ｜ 航太動力學與 3D 打印沙盒 (Master Edition)</p>
 
-            <div class="stl-drop-zone" id="stl-drop-zone" title="支援 STL 格式 3D 打印模型，自動估算截面積與乾重">
+            <div class="stl-drop-zone" id="stl-drop-zone">
                 <span id="lbl-stl-drop">🖨️ 拖曳或點擊上傳自製火箭 3D 打印檔 (.stl)</span>
                 <input type="file" id="stl-file-input" accept=".stl" style="display: none;">
                 <div class="stl-info" id="stl-info"></div>
@@ -305,7 +216,7 @@
 
             <div class="mode-toggle-box">
                 <span id="lbl-mode" style="font-size: 0.8rem; font-weight: bold; color: #10b981;">🟢 簡易模式 (必定成功)</span>
-                <label class="switch" title="切換硬核物理極限模式，包含氣動剪切、過載斷裂與燃燒室混合比震盪">
+                <label class="switch">
                     <input type="checkbox" id="chk-advanced-mode">
                     <span class="slider round"></span>
                 </label>
@@ -314,16 +225,16 @@
             <div class="config-panel">
                 <h3 id="ui-config-title">🛠️ 基礎發射設定</h3>
                 <div class="form-row">
-                    <label id="lbl-env" title="切換白天或夜間發射場天色光影">發射場天色:</label>
+                    <label id="lbl-env">發射場天色:</label>
                     <select id="sel-env">
                         <option value="DAY" selected>☀️ 白天發射 (Day Launch)</option>
                         <option value="NIGHT">🌙 夜間發射 (Night Launch)</option>
                     </select>
                 </div>
                 <div class="form-row">
-                    <label id="lbl-engine" title="選擇中國新一代主力或全球標竿重型火箭型號">火箭型號:</label>
+                    <label id="lbl-engine">火箭型號:</label>
                     <select id="sel-engine">
-                        <optgroup label="🇨🇳 中國新一代主力火箭" id="grp-cn">
+                        <optgroup label="🇨🇳 中國新一代主力火箭">
                             <option value="CZ10A" selected>長征十號甲 (CZ-10A 登月載人)</option>
                             <option value="CZ12B">長征十二號乙 (CZ-12B 4米級)</option>
                             <option value="TL3">天龍三號 (TL-3 大型液體)</option>
@@ -332,7 +243,7 @@
                             <option value="SQX3">雙曲線三號 (Hyperbola-3)</option>
                             <option value="CZ2F">長征二號F (CZ-2F 載人型)</option>
                         </optgroup>
-                        <optgroup label="🇺🇸 全球重型航天標竿" id="grp-us">
+                        <optgroup label="🇺🇸 全球重型航天標竿">
                             <option value="STARSHIP">星艦全系統 (Starship 120m)</option>
                             <option value="SATURN_V">土星五號 (Saturn V 110m)</option>
                         </optgroup>
@@ -345,7 +256,7 @@
                 <div id="advanced-config" style="display: none; border-top: 1px dashed rgba(255,255,255,0.2); margin-top: 8px; padding-top: 6px;">
                     <div class="config-sub-section" id="sub-prop">🚀 推進與動力系統</div>
                     <div class="form-row">
-                        <label id="lbl-payload" title="任務酬載艙質量。超重載荷需要更大的起飛推重比 (TWR > 1.2)">任務載荷艙:</label>
+                        <label id="lbl-payload">任務載荷艙:</label>
                         <select id="sel-payload">
                             <option value="8000" selected>新一代載人飛船 (8,000 kg)</option>
                             <option value="15000">空間站核心艙 (15,000 kg)</option>
@@ -354,35 +265,35 @@
                         </select>
                     </div>
                     <div class="form-row">
-                        <label id="lbl-fuel" title="一級燃料加注量。過多會增加起飛自重降低推重比，過少則無法入軌">一級燃料加注 (%):</label>
+                        <label id="lbl-fuel">一級燃料加注 (%):</label>
                         <input type="range" id="rng-fuel" min="30" max="100" value="100">
                     </div>
                     <div class="form-row">
-                        <label id="lbl-throttle" title="發動機節流閥開度。在穿過大氣層 Max-Q 期間適度收油門可降低氣動剪切應力">節流閥推力 (%):</label>
+                        <label id="lbl-throttle">節流閥推力 (%):</label>
                         <input type="range" id="rng-throttle" min="40" max="100" value="100">
                     </div>
                     <div class="form-row">
-                        <label id="lbl-ofratio" title="氧化劑與燃料混合比 (O/F)。偏離 100% 過多會導致燃燒室燃溫超限或壓力劇烈震盪">氧化劑/燃料混合比:</label>
+                        <label id="lbl-ofratio">氧化劑/燃料混合比:</label>
                         <input type="range" id="rng-ofratio" min="80" max="120" value="100">
                     </div>
 
                     <div class="config-sub-section" id="sub-gnc">🧭 導航制導與控制 (GNC)</div>
                     <div class="form-row">
-                        <label id="lbl-turn" title="重力轉向 (Gravity Turn) 起始海拔。過早轉向會在稠密大氣中造成巨大阻力，過晚則入軌效率降低">轉向起始高度 (km):</label>
+                        <label id="lbl-turn">轉向起始高度 (km):</label>
                         <input type="range" id="rng-turn" min="1" max="25" value="8">
                     </div>
                     <div class="form-row">
-                        <label id="lbl-tvc" title="發動機推力向量控制 (TVC) 擺角響應靈敏度。過高會誘發氣動彈性高頻顫振空中解體">TVC 噴嘴響應靈敏度:</label>
+                        <label id="lbl-tvc">TVC 噴嘴響應靈敏度:</label>
                         <input type="range" id="rng-tvc" min="50" max="150" value="100">
                     </div>
 
                     <div class="config-sub-section" id="sub-env">🌪️ 外部環境與電氣感測</div>
                     <div class="form-row">
-                        <label id="lbl-wind" title="高空對流層切變風。切變風疊加動態氣壓 (Max-Q) 會大幅考驗箭體側向結構強度">高空切變風強度 (m/s):</label>
+                        <label id="lbl-wind">高空切變風強度 (m/s):</label>
                         <input type="range" id="rng-wind" min="0" max="60" value="15">
                     </div>
                     <div class="form-row">
-                        <label id="lbl-drift" title="慣性測量單元 (IMU) 陀螺儀高頻雜訊與累積漂移">IMU 陀螺儀雜訊漂移:</label>
+                        <label id="lbl-drift">IMU 陀螺儀雜訊漂移:</label>
                         <input type="range" id="rng-drift" min="0" max="100" value="10">
                     </div>
                 </div>
@@ -406,7 +317,7 @@
                 <div class="gauge-bar-bg"><div class="gauge-bar-fill fill-q" id="gauge-q-bar"></div></div>
             </div>
 
-            <div class="debug-panel" id="physics-debug-box">
+            <div class="debug-panel">
                 <h4>
                     <span id="ui-telemetry-title">⚙️ 飛行遙測狀態</span>
                     <button class="toggle-detail-btn" id="btn-toggle-details">📊 展開深度科研</button>
@@ -431,43 +342,5 @@
 
     <div id="canvas-container"></div>
     <script type="module" src="js/rocket_game.js"></script>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    reg.onupdatefound = () => {
-                        const installingWorker = reg.installing;
-                        installingWorker.onstatechange = () => {
-                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                const btn = document.getElementById('btn-pwa-update');
-                                if (btn) {
-                                    btn.innerText = "🚀 發現新版 (點擊更新)";
-                                    btn.style.background = "#10b981";
-                                    btn.style.color = "#030712";
-                                }
-                            }
-                        };
-                    };
-                }).catch(err => console.log('SW setup failed', err));
-            });
-        }
-
-        const updateBtn = document.getElementById('btn-pwa-update');
-        if (updateBtn) {
-            updateBtn.onclick = async () => {
-                updateBtn.innerText = "⏳ 更新中...";
-                if ('serviceWorker' in navigator) {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    for (let reg of regs) { await reg.unregister(); }
-                }
-                if ('caches' in window) {
-                    const keys = await caches.keys();
-                    for (let key of keys) { await caches.delete(key); }
-                }
-                window.location.reload(true);
-            };
-        }
-    </script>
 </body>
 </html>
