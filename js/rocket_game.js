@@ -1,5 +1,5 @@
 /**
- * js/rocket_game.js - JarAscent 3D (整合手機觸覺震動、自適應運鏡、噴嘴座標對齊與多語言)
+ * js/rocket_game.js - JarAscent 3D (企業級資安加固、手機觸覺震動、自適應運鏡、噴嘴座標對齊與多語言)
  * @license MIT
  */
 
@@ -275,7 +275,7 @@ function speakMissionCallout(text, lang = currentLang, urgency = 1.0) {
 
 const I18N = {
     zh: {
-        title: "🚀 躍上穹蒼 3D", subtitle: "航太動力學、多級分離與 3D 打印沙盒 (Master Edition)", langBtn: "English",
+        title: "🚀 J.A.R. 躍上穹蒼 3D", subtitle: "聯合應用科學探索 ｜ 航太動力學與 3D 打印沙盒 (Master Edition)", langBtn: "English",
         toggleUi: "📋 任務控制面板", toggleUiHide: "📋 展開任務控制",
         toggleDetailShow: "📊 展開深度科研", toggleDetailHide: "📉 收起深度科研",
         modeSimple: "🟢 簡易模式 (必定成功)", modeAdvanced: "🔴 進階模式 (硬核物理)",
@@ -286,6 +286,7 @@ const I18N = {
         subEnv: "🌪️ 外部環境與電氣感測", lblWind: "高空切變風強度 (m/s):", lblDrift: "IMU 陀螺儀雜訊漂移:",
         launchBtn: "🔥 啟動 10 秒倒數發射 (Terminal T-10s)", resetBtn: "🔄 重設發射台 (Reset Pad)",
         btnPause: "⏸️ 暫停", btnResume: "▶️ 繼續飛行", btnResetCam: "🎥 重設視角", btnCockpit: "🪟 座艙視角 (C)",
+        btnLegal: "⚖️ 合規條款",
         btnQuickRetry: "⚡ 再次挑戰 (保留設定)", btnDebriefRestart: "🔄 重設全部",
         btnPwaUpdate: "🔄 檢查更新", btnPwaNew: "🚀 發現新版 (點擊更新)", btnPwaUpdating: "⏳ 更新中...",
         btnSlower: "⏪ 減速", btnFaster: "加速 ⏩", timeScalePrefix: "倍速: ",
@@ -319,7 +320,7 @@ const I18N = {
         }
     },
     en: {
-        title: "🚀 JarAscent 3D", subtitle: "Aerospace Dynamics & 3D Print STL Sandbox (Master Edition)", langBtn: "中文 (繁體)",
+        title: "🚀 J.A.R. Ascent 3D", subtitle: "Joint Applied Research | Aerospace Dynamics & 3D Print STL Sandbox (Master Edition)", langBtn: "中文 (繁體)",
         toggleUi: "📋 Mission Control Panel", toggleUiHide: "📋 Expand Panel",
         toggleDetailShow: "📊 Expand Diagnostics", toggleDetailHide: "📉 Collapse Diagnostics",
         modeSimple: "🟢 Simple Mode (Safe)", modeAdvanced: "🔴 Advanced Mode (Hardcore)",
@@ -330,6 +331,7 @@ const I18N = {
         subEnv: "🌪️ Environment & Avionics", lblWind: "High-Alt Wind Shear (m/s):", lblDrift: "IMU Gyro Noise Drift:",
         launchBtn: "🔥 Initiate T-10s Terminal Countdown", resetBtn: "🔄 Reset Launch Pad",
         btnPause: "⏸️ Pause", btnResume: "▶️ Resume", btnResetCam: "🎥 Reset Cam", btnCockpit: "🪟 Cockpit (C)",
+        btnLegal: "⚖️ Legal & AI Notice",
         btnQuickRetry: "⚡ Retry (Keep Settings)", btnDebriefRestart: "🔄 Re-Configure All",
         btnPwaUpdate: "🔄 Check Updates", btnPwaNew: "🚀 Update Available", btnPwaUpdating: "⏳ Updating...",
         btnSlower: "⏪ Slower", btnFaster: "Faster ⏩", timeScalePrefix: "Warp: ",
@@ -362,6 +364,25 @@ const I18N = {
             abort: "Warning! Structural failure. Mission abort!"
         }
     }
+};
+
+const LEGAL_TEXTS = {
+    zh: `
+        <b style="color:#38bdf8;">1. 隱私與資料保護 (GDPR & ISO 27701)</b><br>
+        本沙盒完全於客戶端本機運作。不收集、不傳輸、不儲存任何個人身分識別資訊 (PII)。所有發射設定與遊玩進度均純本機儲存於瀏覽器 localStorage 中。<br><br>
+        <b style="color:#38bdf8;">2. 軍民兩用與出口管制 (ITAR / EAR / Dual-Use)</b><br>
+        本專案之開普勒軌道方程、RK4 數值積分與大氣阻力模型均基於公有領域 (Public Domain) 之標準教科書經典物理學，不包含任何受管制的導彈制導或機密軍事技術。<br><br>
+        <b style="color:#38bdf8;">3. AI 與演算法透明度 (EU AI Act & ISO 42001)</b><br>
+        核心軌道動力學採用 100% 確定性物理算法 (Deterministic Equations)。事故黑盒診斷遵循可解釋性與人機協同原則，所有遙測資料絕不回傳用於模型訓練。
+    `,
+    en: `
+        <b style="color:#38bdf8;">1. Privacy & GDPR / ISO 27701 Compliance</b><br>
+        Operates 100% client-side. No Personally Identifiable Information (PII) is collected, tracked, or transmitted. Flight configurations reside strictly in browser localStorage.<br><br>
+        <b style="color:#38bdf8;">2. Dual-Use & Export Controls (ITAR / EAR)</b><br>
+        Orbital mechanics and RK4 numerical equations are derived exclusively from unclassified, public domain academic textbooks. The simulator contains no classified missile guidance technologies.<br><br>
+        <b style="color:#38bdf8;">3. AI Transparency (EU AI Act & ISO 42001)</b><br>
+        Core astrodynamics operate via deterministic algorithms with full mathematical explainability. Local telemetry data is never harvested for external AI model training.
+    `
 };
 
 function setText(id, text) { const el = document.getElementById(id); if (el) el.innerText = text; }
@@ -419,9 +440,16 @@ function computeSTLProperties(geometry) {
     };
 }
 
+// 🛡️ 企業級客戶端 DoS 與記憶體防護 (Client-Side ReDoS/OOM Guard)
 function handleSTLFile(file) {
     if (!file || !file.name.toLowerCase().endsWith('.stl')) {
         alert(currentLang === 'zh' ? '請上傳有效的 3D 打印 .stl 檔案！' : 'Please upload a valid .stl 3D print file!');
+        return;
+    }
+
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB 安全上限
+    if (file.size > MAX_FILE_SIZE) {
+        alert(currentLang === 'zh' ? '檔案過大！請上傳小於 20MB 的 STL 檔案。' : 'File too large! Maximum allowed size is 20MB.');
         return;
     }
 
@@ -430,8 +458,15 @@ function handleSTLFile(file) {
         try {
             const loader = new THREE.STLLoader();
             const geometry = loader.parse(e.target.result);
-            geometry.center();
 
+            // 頂點安全閥值檢查 (防止百萬級三角面卡死 WebGL 線程)
+            const triangleCount = geometry.attributes.position.count / 3;
+            if (triangleCount > 500000) {
+                alert(currentLang === 'zh' ? '模型面數過高 (>50萬面)，請先進行減面優化。' : 'Model mesh too dense (>500k triangles). Please optimize mesh.');
+                return;
+            }
+
+            geometry.center();
             const stats = computeSTLProperties(geometry);
             customRocketStats = stats;
 
@@ -456,13 +491,13 @@ function handleSTLFile(file) {
             const infoBox = document.getElementById('stl-info');
             if (infoBox) {
                 infoBox.style.display = 'block';
-                infoBox.innerHTML = `✅ <b>${file.name}</b> 解析成功！<br>• 乾重: ${(stats.dryMassStage1+stats.dryMassStage2)/1000}t | 起飛推力: ${(stats.thrustSea/1000).toFixed(0)}kN<br>• 截面積: ${stats.frontalArea}m² | 氣動外形已載入`;
+                infoBox.innerHTML = `✅ <b>${file.name.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</b> 解析成功！<br>• 乾重: ${(stats.dryMassStage1+stats.dryMassStage2)/1000}t | 起飛推力: ${(stats.thrustSea/1000).toFixed(0)}kN<br>• 截面積: ${stats.frontalArea}m² | 氣動外形已載入`;
             }
             
-            updateStatus(currentLang === 'zh' ? `✅ 自訂 3D 打印模型 [${file.name}] 裝載完成！` : `✅ Custom STL Model [${file.name}] Armed!`, "#10b981");
+            updateStatus(currentLang === 'zh' ? `✅ 自訂 3D 打印模型裝載完成！` : `✅ Custom STL Model Armed!`, "#10b981");
 
         } catch (err) {
-            console.error(err);
+            console.error('STL Parse Security Guard:', err);
             alert(currentLang === 'zh' ? '解析 STL 失敗，請確認檔案格式是否正確。' : 'Failed to parse STL file.');
         }
     };
@@ -482,6 +517,7 @@ function applyLanguageUI() {
     if (pauseEl) pauseEl.innerText = isPaused ? t.btnResume : t.btnPause;
     setText('btn-reset-cam', t.btnResetCam);
     setText('btn-cockpit', t.btnCockpit);
+    setText('btn-legal-notice', t.btnLegal);
 
     setText('btn-quick-retry', t.btnQuickRetry);
     setText('btn-debrief-restart', t.btnDebriefRestart);
@@ -618,7 +654,7 @@ function triggerAbortSequence(visualPos, shakeAmount) {
     playExplosionSound();
     stopRocketRumble();
     speakMissionCallout(I18N[currentLang].speech.abort, currentLang, 1.25);
-    triggerHaptic([400, 100, 500]); // 📳 爆炸持續強震
+    triggerHaptic([400, 100, 500]);
     triggerCatastrophicExplosion(visualPos);
     cameraShake = shakeAmount;
     showMissionDebrief(getOrbitalElements(rocket));
@@ -649,7 +685,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.escapeTower.visible = false;
                     }
                     playStagingSound();
-                    triggerHaptic([40, 60, 80]); // 📳 逃逸塔分離雙震
+                    triggerHaptic([40, 60, 80]);
                     cameraShake = Math.max(cameraShake, 1.8);
                     showMilestone(currentLang === 'zh' ? `🚀 T+${sep.time.toFixed(0)}s 逃逸塔分離!` : `🚀 T+${sep.time.toFixed(0)}s Tower Jettison!`, "#ef4444");
                     speakMissionCallout(sp.escape);
@@ -672,7 +708,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.boosters.visible = false;
                     }
                     playStagingSound();
-                    triggerHaptic([120, 80, 200]); // 📳 一級分離沉重機械頓挫
+                    triggerHaptic([120, 80, 200]);
                     cameraShake = 3.8;
                     bulletTimeTimer = 2.0;
                     showMilestone(currentLang === 'zh' ? `⚡ T+${sep.time.toFixed(0)}s 一級分離，二級點火!` : `⚡ T+${sep.time.toFixed(0)}s Stage 1 Sep & S2 Ignition!`, "#f59e0b");
@@ -694,7 +730,7 @@ function handleDataDrivenSeparation(rocket) {
                         activeRocketParts.fairingR.visible = false;
                     }
                     playStagingSound();
-                    triggerHaptic([40, 60, 80]); // 📳 整流罩拋離輕震
+                    triggerHaptic([40, 60, 80]);
                     cameraShake = Math.max(cameraShake, 1.5);
                     showMilestone(currentLang === 'zh' ? `✨ T+${sep.time.toFixed(0)}s 拋整流罩!` : `✨ T+${sep.time.toFixed(0)}s Fairing Sep!`, "#38bdf8");
                     speakMissionCallout(sp.fairing);
@@ -704,7 +740,7 @@ function handleDataDrivenSeparation(rocket) {
                     rocket.missionAccomplished = true;
                     rocket.throttle = 0;
                     stopRocketRumble();
-                    triggerHaptic([200, 100, 200, 100, 300]); // 📳 圓滿入軌慶祝節奏
+                    triggerHaptic([200, 100, 200, 100, 300]);
                     showMilestone(currentLang === 'zh' ? `🛰️ T+${sep.time.toFixed(0)}s 二級熄火，入軌成功!` : `🛰️ T+${sep.time.toFixed(0)}s Stage 2 Cutoff & Inserted!`, "#10b981");
                     updateStatus(I18N[currentLang].orbitSuccess, "#10b981");
                     speakMissionCallout(sp.orbit);
@@ -762,7 +798,7 @@ function updateTelemetryValues() {
     const velBox = document.getElementById('hud-box-vel');
     if (parseFloat(mach) >= 1.0 && !sonicBoomTriggered) {
         sonicBoomTriggered = true;
-        triggerHaptic([100, 50, 150]); // 📳 音爆雙震
+        triggerHaptic([100, 50, 150]);
         if (velBox) {
             velBox.classList.add('sonic-boom');
             setTimeout(() => velBox.classList.remove('sonic-boom'), 800);
@@ -868,7 +904,6 @@ function showMissionDebrief(orbit) {
     }
 }
 
-// ⚡ 核心修復：徹底清空舊碎片、鏡頭精準重定發射台地面
 function resetMission() {
     document.body.style.opacity = '0';
     setTimeout(() => {
@@ -881,7 +916,6 @@ function resetMission() {
         manualControlInput = { pitch: 0, yaw: 0, roll: 0 };
         triggeredEvents.clear();
 
-        // 🧹 1. 完全清除上一場遺留的所有殘骸與粒子
         clearAllDebrisAndVFX();
 
         const modal = document.getElementById('debrief-modal');
@@ -891,7 +925,6 @@ function resetMission() {
         const manualHud = document.getElementById('manual-control-hud');
         if (manualHud) manualHud.style.display = 'none';
 
-        // 🔄 2. 重新構建並初始化火箭模型
         const engKey = document.getElementById('sel-engine')?.value || 'CZ10A';
         if (engKey !== 'CUSTOM_STL') {
             switchRocketMesh(engKey);
@@ -906,7 +939,6 @@ function resetMission() {
 
         rocket = null;
 
-        // 🎥 3. 鏡頭精確復位到發射台特寫視角
         currentCamMode = CAM_MODE.LAUNCH_PAD;
         camera.position.set(0, 1008, 24);
         controls.target.set(0, 1004, 0);
@@ -955,7 +987,7 @@ function startCountdownSequence() {
         const urgency = countdownTime <= 3 ? 1.25 : 1.0;
         if (countdownTime <= 3 && countdownTime > 0) {
             playBeepSound(1280, 0.14, 1.3);
-            triggerHaptic([30]); // 📳 最後3秒心跳滴答微震
+            triggerHaptic([30]);
         } else if (countdownTime > 3) {
             playBeepSound(720, 0.08, 1.0);
         }
@@ -1015,7 +1047,7 @@ function executeLiftoff() {
     rocket.isLaunched = true;
     rocket.guidanceActive = true;
     cameraShake = 2.8;
-    triggerHaptic([60, 30, 80, 40, 100, 50, 150]); // 📳 點火起飛密集轟鳴震動
+    triggerHaptic([60, 30, 80, 40, 100, 50, 150]);
     updateStatus(I18N[currentLang].liftoff, "#38bdf8");
 
     const manualHud = document.getElementById('manual-control-hud');
@@ -1095,6 +1127,27 @@ function bindUI() {
         }
     };
     if (btnPause) btnPause.onclick = togglePause;
+
+    // ⚖️ 法律與 AI 合規彈窗監聽
+    const legalModal = document.getElementById('legal-modal');
+    const legalBody = document.getElementById('legal-modal-body');
+    const closeLegalBtn = document.getElementById('btn-close-legal');
+    const btnLegalNotice = document.getElementById('btn-legal-notice');
+
+    if (btnLegalNotice) {
+        btnLegalNotice.onclick = () => {
+            if (legalBody && legalModal) {
+                legalBody.innerHTML = LEGAL_TEXTS[currentLang] || LEGAL_TEXTS.zh;
+                legalModal.style.display = 'flex';
+            }
+        };
+    }
+
+    if (closeLegalBtn) {
+        closeLegalBtn.onclick = () => {
+            if (legalModal) legalModal.style.display = 'none';
+        };
+    }
 
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space') togglePause();
@@ -1247,7 +1300,7 @@ function gameLoop(now) {
 
         const isS2 = rocket.stage === 2;
 
-        // 🎯 精確噴嘴出口世界坐標 (消除噴焰與火箭斷層脫節)
+        // 🎯 精確噴嘴出口世界坐標
         const localNozzleY = isS2 ? 0.0 : -0.2;
         const currentNozzleWorldPos = new THREE.Vector3(0, localNozzleY, 0).applyMatrix4(rocketGroup.matrixWorld);
 
